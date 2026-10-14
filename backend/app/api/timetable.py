@@ -593,13 +593,13 @@ def get_timetable_stats(
     stats_query = """
         SELECT 
             COUNT(DISTINCT cs.course_code) as unique_courses,
-            COUNT(*) as total_schedule_entries,
+            COUNT(DISTINCT cs.id) as total_schedule_entries,
             COUNT(DISTINCT cs.room) as rooms_used,
             COUNT(DISTINCT csi.instructor_id) as instructors_count,
             COUNT(DISTINCT cs.program) as programs_count,
-            COUNT(CASE WHEN cs.shift = 'Morning' THEN 1 END) as morning_classes,
-            COUNT(CASE WHEN cs.shift = 'Afternoon' THEN 1 END) as afternoon_classes,
-            COUNT(CASE WHEN cs.shift = 'Evening' THEN 1 END) as evening_classes
+            COUNT(DISTINCT cs.id) FILTER (WHERE cs.shift = 'Morning') as morning_classes,
+            COUNT(DISTINCT cs.id) FILTER (WHERE cs.shift = 'Afternoon') as afternoon_classes,
+            COUNT(DISTINCT cs.id) FILTER (WHERE cs.shift = 'Evening') as evening_classes
         FROM course_schedules cs
         JOIN academic_sessions asess ON cs.academic_session_id = asess.id
         LEFT JOIN course_schedule_instructors csi ON cs.id = csi.course_schedule_id

@@ -5,7 +5,8 @@ It answers students' questions from the department website (<https://cs.qau.edu.
 links to — courses, prerequisites, schemes of study, faculty, admissions, fees, the academic calendar,
 timetables and regulations — in English, Urdu and Roman Urdu, with citations.
 
-**Start here:** [docs/ADVISOR.md](docs/ADVISOR.md) (architecture, operations, admin guide, limits) and
+**Start here:** use the Docker Compose setup below to run the full portal, then see
+[docs/ADVISOR.md](docs/ADVISOR.md) (architecture, operations, admin guide, limits) and
 [docs/PREREQUISITES.md](docs/PREREQUISITES.md) (prerequisite chains, data sources, adding schemes).
 
 | Part | Where |
@@ -18,29 +19,54 @@ timetables and regulations — in English, Urdu and Roman Urdu, with citations.
 | Evaluation sets | `backend/advisor/eval/golden.json`, `golden_holdout.json`, `golden_prereq.json` |
 | Deployment | `deploy/advisor/` (Docker, systemd, nginx) |
 
-The portal keeps its familiar interface (sidebar with Chat, Study Plan, Courses, Fees, Timetable,
-Policies, History, and the admin panel). Only the engine behind **Chat** changed; it is reached through
-`/advisor/*` so it never collides with the portal's own `/api/v1` routes.
+The portal includes Chat, Study Plan, Courses, Fees, Timetable, Policies, History, and an admin panel.
+Its colors and university branding follow the QAU Computer Sciences department site. The advisor engine
+is reached through `/advisor/*` so it never collides with the portal's own `/api/v1` routes.
 
-## Quick start (the whole portal on one machine)
+## Quick start (Docker Compose)
 
-```bash
-cd backend
-python3 -m venv .venv && .venv/bin/pip install -r requirements-advisor-dev.txt
-.venv/bin/python -m advisor.cli refresh                 # crawl the site, build the index (~5 min, once)
-cd ../frontend && npm ci && cd ..
-./scripts/run-all.sh                                    # portal API :8001, engine :8010, portal UI :5173
+Requirements: Git and Docker Desktop (Windows/macOS) or Docker Engine with the Compose v2 plugin
+(Linux). Docker Compose builds the portal, API, advisor engine, and PostgreSQL database together.
+The first build downloads the Python dependencies and language models and can take several minutes.
+
+```text
+git clone https://github.com/usmanmustafa041/ai-advisor-for-cs-QAU.git
+cd ai-advisor-for-cs-QAU
 ```
 
-Open <http://127.0.0.1:5173>. Guests chat without anything being stored; signed-in students get
-saved conversations and History (the engine asks the portal who the caller is, so there is one
-account system). Portal administrators open **Chatbot Engine** in the admin panel and paste the
-Gemini API key under *AI providers* (verified, encrypted, never shown again). Without a key the
-assistant uses the local Ollama model (`ollama pull qwen3:8b`); if both are down students still
-receive the matching passages.
+Optionally create a local environment file from the committed template; never commit real credentials:
 
-Switching back is one setting: `VITE_CHAT_ENGINE=legacy` in the frontend environment restores the old
-chat engine untouched. The standalone UI is still available: `ADVISOR_SERVE_FRONTEND_DIR=../web/dist`.
+```powershell
+Copy-Item .env.example .env
+```
+
+```bash
+cp .env.example .env
+```
+
+Change `POSTGRES_PASSWORD` and `AUTH_SECRET` in `.env` before using the stack beyond a local demo.
+Then build and start the application from the repository root:
+
+```bash
+docker compose up --build -d
+docker compose ps
+```
+
+Open <http://localhost>. The API health check is at <http://localhost/api/v1/health>; the FastAPI
+documentation is at <http://localhost/docs>. To stop the services while preserving the database and
+conversation data, run `docker compose down`.
+
+The assistant can return matching department passages without a configured language model. To run the
+optional local Ollama model instead, start the `local-llm` profile and download the model once:
+
+```bash
+docker compose --profile local-llm up --build -d
+docker compose exec ollama ollama pull qwen3:8b
+```
+
+Alternatively, administrators can configure a hosted provider from **Chatbot Engine → AI providers**.
+For local development without Docker, see [backend/README.md](backend/README.md),
+[frontend/README.md](frontend/README.md), and [scripts/run-all.sh](scripts/run-all.sh).
 
 ## Measured quality
 

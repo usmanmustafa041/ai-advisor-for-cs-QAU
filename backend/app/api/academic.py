@@ -129,6 +129,10 @@ def list_courses(
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
 ) -> list[dict]:
+    # Browsers submit an empty search box as ``search=``. Treat that the same
+    # as an omitted filter; an empty value with a NULL pattern otherwise makes
+    # every SQL ILIKE comparison unknown and hides the entire catalog.
+    search = (search or "").strip() or None
     rows = db.execute(
         text(f"""
             SELECT c.id, c.code, c.title, c.description, c.theory_credit_hours,

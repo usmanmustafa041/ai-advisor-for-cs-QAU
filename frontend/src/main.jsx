@@ -23,6 +23,17 @@ const suggestions = [
   ['Timetable', 'Monday classes for 8th semester'],
 ]
 
+function QauBrand({ context = 'AI Academic Advisor', compact = false }) {
+  return <a className={`brand ${compact ? 'compact' : ''}`} href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer" aria-label="Department of Computer Sciences, Quaid-i-Azam University">
+    <img className="brand-crest" src="/qau-logo.png" alt="Quaid-i-Azam University crest" />
+    <span className="brand-copy">
+      <strong>Department of Computer Sciences</strong>
+      <small>Quaid-i-Azam University</small>
+      <em>{context}</em>
+    </span>
+  </a>
+}
+
 function savedAuth() {
   try { return JSON.parse(localStorage.getItem('qau-auth')) || null } catch { return null }
 }
@@ -114,7 +125,16 @@ function AuthScreen({ online, onAuthenticated, onGuest }) {
   }
 
   return <main className="auth-page">
-    <section className="auth-hero"><div className="brand-mark large">Q</div><p className="eyebrow">QUAID-I-AZAM UNIVERSITY</p><h1>AI-powered academic guidance for every CS student.</h1><p>Ask about courses, prerequisites, fees, policies, class schedules, exams, and research requirements in English or Urdu.</p><div className="auth-features"><span>✓ Source-backed answers</span><span>✓ Private query history</span><span>✓ English + اردو</span></div></section>
+    <section className="auth-hero">
+      <QauBrand context="AI Academic Advisor" />
+      <div className="auth-intro">
+        <p className="eyebrow">STUDENT ACADEMIC SERVICES</p>
+        <h1>Academic guidance, grounded in department information.</h1>
+        <p>Ask about courses, prerequisites, fees, policies, class schedules, exams, and research requirements in English or Urdu.</p>
+        <div className="auth-features"><span>✓ Source-backed answers</span><span>✓ Private query history</span><span>✓ English + اردو</span></div>
+      </div>
+      <small className="campus-line">Computer Science Department · Islamabad, Pakistan</small>
+    </section>
     <section className="auth-card"><div className="connection-row"><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Service online' : 'Service offline'}</span></div><p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : mode === 'register' ? 'STUDENT REGISTRATION' : 'ACCOUNT RECOVERY'}</p><h2>{mode === 'login' ? 'Sign in to your advisor' : mode === 'register' ? 'Create your account' : mode === 'forgot-password' ? 'Reset your password' : 'Choose a new password'}</h2><p>{mode === 'login' ? 'Students and administrators use the same secure sign-in.' : mode === 'register' ? 'Register with your email and a secure password.' : 'Use the recovery token to securely replace your password.'}</p>
       <form onSubmit={submit} className="stack-form">{mode === 'register' && <label>Full name<input value={fullName} onChange={(e) => setFullName(e.target.value)} required autoComplete="name" /></label>}{mode !== 'reset-password' && <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" /></label>}{mode === 'reset-password' && <label>Reset token<input value={resetToken} onChange={(e) => setResetToken(e.target.value)} required /></label>}{!['forgot-password'].includes(mode) && <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength="8" required autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>}{['register', 'reset-password'].includes(mode) && <label>Confirm password<input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength="8" required autoComplete="new-password" /></label>}{notice && <div className="notice">{notice}</div>}{error && <div className="form-error" role="alert">{error}</div>}<button className="primary" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Register' : mode === 'forgot-password' ? 'Send reset token' : 'Save new password'}</button></form>
       <button className="guest-button" onClick={onGuest}>Continue without signing in</button>
@@ -131,7 +151,18 @@ function Shell({ auth, online, active, setActive, onLogout, children }) {
   const studentNav = guest ? ['Chat', 'Study Plan', 'Courses', 'Fees', 'Timetable', 'Policies'] : ['Chat', 'Study Plan', 'Courses', 'Fees', 'Timetable', 'Policies', 'History']
   const adminNav = ['Dashboard', 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports']
   const items = admin ? adminNav : studentNav
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">Q</div><div><strong>QAU CS</strong><small>Academic Advisor</small></div></div><div className="profile-card"><div className="avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div><div><strong>{auth.user.email}</strong><small>{admin ? 'Administrator' : guest ? 'Guest · history off' : 'Student account'}</small></div><span className="status-dot" /></div><nav>{items.map((item) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="icon" aria-hidden="true">{admin ? '◇' : '•'}</span>{item}</button>)}</nav><div className="sidebar-bottom"><div className="source-note"><span>✓</span><div><strong>QAU source library</strong><small>Check source, scheme and date</small></div></div>{guest && <div className="guest-save-note">Sign in to save and revisit your conversations.</div>}<button className="nav-item" onClick={onLogout}><span className="icon">↪</span>{guest ? 'Sign in' : 'Log out'}</button></div></aside><main className="main-content"><header className="topbar"><div><p className="eyebrow">{admin ? 'ADMINISTRATION' : guest ? 'GUEST ADVISOR' : 'STUDENT PORTAL'} / {active.toUpperCase()}</p><h1>{active}</h1></div><div className="top-actions"><span className={online ? 'connection online' : 'connection'}><i />{online ? 'API connected' : 'Offline'}</span><div className="mini-avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div></div></header>{children}</main></div>
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <QauBrand context={admin ? 'Administration' : 'AI Academic Advisor'} compact />
+      <div className="profile-card"><div className="avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div><div><strong>{auth.user.email}</strong><small>{admin ? 'Administrator' : guest ? 'Guest · history off' : 'Student account'}</small></div><span className="status-dot" /></div>
+      <nav>{items.map((item) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="icon" aria-hidden="true">{admin ? '◇' : '•'}</span>{item}</button>)}</nav>
+      <div className="sidebar-bottom"><div className="source-note"><span>✓</span><div><strong>QAU source library</strong><small>Check source, scheme and date</small></div></div>{guest && <div className="guest-save-note">Sign in to save and revisit your conversations.</div>}<button className="nav-item" onClick={onLogout}><span className="icon">↪</span>{guest ? 'Sign in' : 'Log out'}</button></div>
+    </aside>
+    <main className="main-content">
+      <header className="topbar"><div><p className="eyebrow">{admin ? 'ADMINISTRATION' : guest ? 'GUEST ADVISOR' : 'STUDENT PORTAL'} / {active.toUpperCase()}</p><h1>{active}</h1><span className="topbar-subtitle">Department of Computer Sciences</span></div><div className="top-actions"><a className="official-site-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Services online' : 'Offline'}</span><div className="mini-avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div></div></header>
+      {children}
+    </main>
+  </div>
 }
 
 function StudentPortal({ auth, online, onLogout }) {
@@ -320,7 +351,18 @@ function History({ auth }) {
 function AdminPortal({ auth, online, onLogout }) {
   const [active, setActive] = useState('Dashboard')
   const navIcons = { 'Chatbot Engine': '✨', Dashboard: '📊', CMS: '🧠', Courses: '📚', Prerequisites: '🔗', Fees: '💰', Timetables: '🗓️', Policies: '📋', Knowledge: '📖', 'Query Logs': '🔍', Users: '👥', Model: '🤖', Settings: '⚙️', Reports: '📈' }
-  return <div className="app-shell"><aside className="sidebar"><div className="brand"><div className="brand-mark">Q</div><div><strong>QAU CS</strong><small>Admin Panel</small></div></div><div className="profile-card"><div className="avatar">AD</div><div><strong>{auth.user.email}</strong><small>Administrator</small></div><span className="status-dot" /></div><nav>{['Dashboard', ...(CHAT_ENGINE === 'advisor' ? ['Chatbot Engine'] : []), 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports'].map((item) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="icon" aria-hidden="true">{navIcons[item] || '◇'}</span>{item}</button>)}</nav><div className="sidebar-bottom"><div className="source-note"><span>✓</span><div><strong>Admin access</strong><small>Full system control</small></div></div><button className="nav-item" onClick={onLogout}><span className="icon">↪</span>Log out</button></div></aside><main className="main-content"><header className="topbar"><div><p className="eyebrow">ADMINISTRATION / {active.toUpperCase()}</p><h1>{active}</h1></div><div className="top-actions"><span className={online ? 'connection online' : 'connection'}><i />{online ? 'API connected' : 'Offline'}</span><div className="mini-avatar">AD</div></div></header><div className="page-content-wrapper">{active === 'Dashboard' ? <AdminDashboard auth={auth} setActive={setActive} /> : active === 'Chatbot Engine' ? <AdvisorAdmin auth={auth} /> : active === 'Timetable Management' && import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? <TimetableManagement auth={auth} /> : active === 'Ingestion Review' ? <KnowledgeReview request={(path, options) => api(path, options, auth)} /> : active === 'CMS' ? <CMSManager auth={auth} /> : active === 'Reports' ? <Reports auth={auth} /> : active === 'Query Logs' ? <QueryLogs auth={auth} /> : active === 'Model' ? <ModelManager auth={auth} /> : active === 'Settings' ? <SettingsManager auth={auth} /> : <AdminRecords auth={auth} module={active} />}</div></main></div>
+  return <div className="app-shell">
+    <aside className="sidebar">
+      <QauBrand context="Administration" compact />
+      <div className="profile-card"><div className="avatar">AD</div><div><strong>{auth.user.email}</strong><small>Administrator</small></div><span className="status-dot" /></div>
+      <nav>{['Dashboard', ...(CHAT_ENGINE === 'advisor' ? ['Chatbot Engine'] : []), 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports'].map((item) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="icon" aria-hidden="true">{navIcons[item] || '◇'}</span>{item}</button>)}</nav>
+      <div className="sidebar-bottom"><div className="source-note"><span>✓</span><div><strong>Admin access</strong><small>Full system control</small></div></div><button className="nav-item" onClick={onLogout}><span className="icon">↪</span>Log out</button></div>
+    </aside>
+    <main className="main-content">
+      <header className="topbar"><div><p className="eyebrow">ADMINISTRATION / {active.toUpperCase()}</p><h1>{active}</h1><span className="topbar-subtitle">Department of Computer Sciences</span></div><div className="top-actions"><a className="official-site-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Services online' : 'Offline'}</span><div className="mini-avatar">AD</div></div></header>
+      <div className="page-content-wrapper">{active === 'Dashboard' ? <AdminDashboard auth={auth} setActive={setActive} /> : active === 'Chatbot Engine' ? <AdvisorAdmin auth={auth} /> : active === 'Timetable Management' && import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? <TimetableManagement auth={auth} /> : active === 'Ingestion Review' ? <KnowledgeReview request={(path, options) => api(path, options, auth)} /> : active === 'CMS' ? <CMSManager auth={auth} /> : active === 'Reports' ? <Reports auth={auth} /> : active === 'Query Logs' ? <QueryLogs auth={auth} /> : active === 'Model' ? <ModelManager auth={auth} /> : active === 'Settings' ? <SettingsManager auth={auth} /> : <AdminRecords auth={auth} module={active} />}</div>
+    </main>
+  </div>
 }
 
 const adminConfig = {

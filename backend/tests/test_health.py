@@ -1,9 +1,30 @@
 from fastapi.testclient import TestClient
 
+from app.api.academic import list_courses
 from app.main import app
 
 
 client = TestClient(app)
+
+
+class _EmptyCourseRows:
+    def mappings(self):
+        return []
+
+
+class _CourseSearchCapture:
+    def __init__(self):
+        self.parameters = None
+
+    def execute(self, _statement, parameters):
+        self.parameters = parameters
+        return _EmptyCourseRows()
+
+
+def test_empty_course_search_is_treated_as_no_filter() -> None:
+    db = _CourseSearchCapture()
+    assert list_courses(search="  ", limit=100, db=db) == []
+    assert db.parameters == {"search": None, "pattern": None, "limit": 100}
 
 
 def test_root_points_to_docs() -> None:

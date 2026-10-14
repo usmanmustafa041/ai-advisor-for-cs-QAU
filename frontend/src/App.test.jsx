@@ -49,7 +49,7 @@ describe('academic advisor interface', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send query' }))
     expect(await screen.findByText('134 credit hours')).toBeInTheDocument()
     expect(screen.getByText(/BSCS scheme · p. 1/)).toBeInTheDocument()
-    expect(container.querySelector('img')).toBeNull()
+    expect(container.querySelector('.message-bubble img')).toBeNull()
     expect(container.querySelector('a[href^="javascript:"]')).toBeNull()
     expect(screen.queryByText(/% confidence/)).not.toBeInTheDocument()
   })

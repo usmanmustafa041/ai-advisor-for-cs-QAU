@@ -1,7 +1,7 @@
 /* Small additions for the new chat engine; everything else reuses the portal's own chat styles. */
 .message-bubble sup.cite-mark {
   display: inline-grid; place-items: center; min-width: 1.35em; height: 1.35em; padding: 0 .25em; margin: 0 .1em;
-  border-radius: 6px; background: #dff1ed; color: #1a5f57; font-size: .66rem; font-weight: 700; vertical-align: super;
+  border-radius: 6px; background: #dceee1; color: #105d2d; font-size: .66rem; font-weight: 700; vertical-align: super;
 }
 .message-bubble.is-error { border: 1px solid #e9b4b4; background: #fff4f4; color: #8a2f2f; }
 .message-bubble ul, .message-bubble ol { padding-inline-start: 1.3em; margin: 8px 0; }
@@ -19,12 +19,12 @@
 .message-bubble .table-scroll td { padding: 9px 12px; vertical-align: top; }
 .message-bubble .table-scroll tr:nth-child(even) td { background: #f9fcfb; }
 .message-bubble .table-scroll td:first-child { white-space: nowrap; }
-.message-bubble .table-scroll td code { display: inline-block; padding: 3px 9px; border-radius: 999px; background: #e3f1ed; color: #17665f; font: inherit; font-size: 11.5px; font-weight: 600; }
-.message-bubble.has-table p > strong:only-child { display: inline-block; margin-top: 8px; padding: 3px 13px; border-radius: 999px; background: #17665f; color: #fff; font-size: 12px; letter-spacing: .02em; }
+.message-bubble .table-scroll td code { display: inline-block; padding: 3px 9px; border-radius: 999px; background: #e8f3ec; color: #105d2d; font: inherit; font-size: 11.5px; font-weight: 600; }
+.message-bubble.has-table p > strong:only-child { display: inline-block; margin-top: 8px; padding: 3px 13px; border-radius: 999px; background: #18763b; color: #fff; font-size: 12px; letter-spacing: .02em; }
 .message-bubble.has-table blockquote { margin: 8px 0; padding: 8px 12px; border: 0; border-inline-start: 3px solid #7fb5a8; border-radius: 8px; background: #f2f9f7; font-size: 12.5px; }
 .message-bubble sub { display: block; margin-top: 10px; vertical-align: baseline; font-size: 10.5px; line-height: 1.5; color: #8aa09d; }
 .followups { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; }
 .followups small { color: #93a3a2; font-size: 11px; margin-inline-end: 2px; }
-.followups button { border: 1px solid #bcd9d1; background: #fff; color: #17665f; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
-.followups button:hover:not(:disabled) { background: #e8f3ef; border-color: #7fb5a8; }
+.followups button { border: 1px solid #c6d9cb; background: #fff; color: #105d2d; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
+.followups button:hover:not(:disabled) { background: #e8f3ec; border-color: #9fc9aa; }
 .followups button:disabled { opacity: .5; cursor: default; }

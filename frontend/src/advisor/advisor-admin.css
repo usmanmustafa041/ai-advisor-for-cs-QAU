@@ -1,7 +1,7 @@
 /* The chatbot-engine admin screens, scoped so they cannot affect the portal's own styles. */
 .advisor-admin {
-  --bg: #f7faf9; --surface: #ffffff; --surface-2: #eef5f2; --text: #172b33; --muted: #5f7773;
-  --line: #dce9e5; --brand: #1a5f57; --brand-ink: #ffffff; --err: #a13b3b; --ok: #1a7f46;
+  --bg: #f5f7f6; --surface: #ffffff; --surface-2: #edf6f0; --text: #263238; --muted: #68756e;
+  --line: #dfe7e2; --brand: #18763b; --brand-ink: #ffffff; --err: #a13b3b; --ok: #105d2d;
   color: var(--text); padding-bottom: 40px;
   /* ---- admin ---- */
 

@@ -7,8 +7,9 @@
 -- Programs: BS, MS-IST, MS-DS, MPhil, PhD, Repeaters, Deficiency
 -- ============================================================================
 
--- First, ensure the schema is created
-\i backend/scripts/init_timetable_schema.sql
+-- The schema must be applied first (docker-compose mounts it as
+-- 014-timetable.sql). Keeping this seed self-contained makes it usable both
+-- during first-time database initialization and against an existing volume.
 
 BEGIN;
 
@@ -17,11 +18,13 @@ BEGIN;
 -- ============================================================================
 
 INSERT INTO academic_sessions (session_name, effective_from, is_current)
-VALUES ('Spring 2026', '2026-04-20', true)
+VALUES ('Spring 2026', '2026-04-20', false)
 ON CONFLICT (session_name) 
 DO UPDATE SET 
     effective_from = EXCLUDED.effective_from,
-    is_current = EXCLUDED.is_current,
+    -- This is retained historical data, not a claim that Spring 2026 is the
+    -- current timetable after a later term begins.
+    is_current = false,
     updated_at = NOW();
 
 -- ============================================================================

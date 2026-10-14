@@ -71,6 +71,15 @@ streaming), set `ADVISOR_TRUST_PROXY_HEADERS=true`, schedule `advisor.cli refres
 pointing at the portal's `/api/v1/auth/me`) and the portal interface (:5173). Single sign-on works by the
 engine forwarding the caller's bearer token to that URL; nothing is trusted unless the portal confirms it.
 
+For the Docker Compose portal deployment, run `docker compose up --build -d` from the repository root.
+It starts the portal API, advisor engine and web proxy; the advisor data and encryption key persist in
+the `qau_advisor_engine_data` volume. On first startup, build the knowledge index and restart the engine:
+
+```bash
+docker compose exec advisor python -m advisor.cli refresh
+docker compose restart advisor
+```
+
 * **Guests**: the browser sends its own recent turns and `ephemeral: true`; the server stores nothing
   (a question is logged only if it was abstained, errored or degraded, so gaps can be fixed).
 * **Students**: conversations are owned by the portal user id; one student can never read or delete
