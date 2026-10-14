@@ -28,3 +28,13 @@
 .followups button { border: 1px solid #c6d9cb; background: #fff; color: #105d2d; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
 .followups button:hover:not(:disabled) { background: #e8f3ec; border-color: #9fc9aa; }
 .followups button:disabled { opacity: .5; cursor: default; }
+
+@media (max-width: 768px) {
+  .message-bubble .table-scroll { -webkit-overflow-scrolling: touch; }
+  .message-bubble .table-scroll table { min-width: 360px; font-size: 11.5px; }
+  .message-bubble .table-scroll th { padding: 7px 9px; font-size: 9.5px; }
+  .message-bubble .table-scroll td { padding: 7px 9px; font-size: 11px; }
+  .message-bubble .table-scroll td code { padding: 2px 7px; font-size: 10.5px; }
+  .followups button { padding: 5px 11px; font-size: 11px; }
+}
+

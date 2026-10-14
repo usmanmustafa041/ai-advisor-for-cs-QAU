@@ -44,7 +44,7 @@ export function renderAnswerHtml(text) {
 function AnswerBubble({ text, error }) {
   const html = useMemo(() => renderAnswerHtml(text), [text])
   const tabular = html.includes('table-scroll')
-  return <div className={`message-bubble ${error ? 'is-error' : ''} ${tabular ? 'has-table' : ''}`} dangerouslySetInnerHTML={{ __html: html }} />
+  return <div className={`message-bubble ${error ? 'is-error' : ''} ${tabular ? 'has-table' : ''}`} dir="auto" dangerouslySetInnerHTML={{ __html: html }} />
 }
 
 /** Markdown stripped for plain-text lists such as the History page. */
@@ -83,6 +83,7 @@ export function AdvisorChat({ auth, suggestions = [] }) {
   const [language, setLanguage] = useState('en')
   const [sessions, setSessions] = useState([])
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [showHistoryMobile, setShowHistoryMobile] = useState(false)
   const scrollRef = useRef(null)
   const urdu = language === 'ur'
 
@@ -173,7 +174,7 @@ export function AdvisorChat({ auth, suggestions = [] }) {
   const feedbackRequest = useCallback((path, options) => advisorRequest(path, options, auth), [auth])
   const stageText = (s) => (STAGE[urdu ? 'ur' : 'en'][s] || '')
 
-  return <section className={`chat-layout ${!guest ? 'with-sidebar' : ''}`} dir={urdu ? 'rtl' : 'ltr'}>
+  return <section className={`chat-layout ${!guest ? 'with-sidebar' : ''}`} dir="ltr">
     {!guest && <aside className="chat-history-sidebar">
       <div className="chat-sidebar-header">
         <h3>Conversations</h3>
@@ -189,8 +190,45 @@ export function AdvisorChat({ auth, suggestions = [] }) {
       </div>
     </aside>}
     <div className="chat-panel">
-      <div className="chat-toolbar"><span>{guest ? 'Guest conversation · not saved' : 'Private authenticated conversation · history enabled'}</span><button className="language-toggle" onClick={() => setLanguage(urdu ? 'en' : 'ur')}>{urdu ? 'English' : 'اردو'}</button></div>
+      <div className="chat-toolbar">
+        <div className="chat-toolbar-left">
+          {!guest && (
+            <button 
+              type="button" 
+              className="chat-history-toggle-btn mobile-only" 
+              onClick={() => setShowHistoryMobile(true)}
+              aria-label="View conversation history"
+            >
+              💬 Chats {sessions.length > 0 ? `(${sessions.length})` : ''}
+            </button>
+          )}
+          <button 
+            type="button" 
+            className="chat-new-mobile-btn mobile-only" 
+            onClick={newChat} 
+            disabled={sending}
+            aria-label="Start new chat"
+          >
+            + New
+          </button>
+          <span>{guest ? 'Guest conversation · not saved' : 'Private authenticated conversation · history enabled'}</span>
+        </div>
+        <button className="language-toggle" onClick={() => setLanguage(urdu ? 'en' : 'ur')}>{urdu ? 'English' : 'اردو'}</button>
+      </div>
       <div className="chat-scroll" ref={scrollRef} onScroll={onScroll} aria-live="polite">
+        {messages.length === 1 && suggestions?.length > 0 && (
+          <div className="mobile-chat-suggestions">
+            <p className="mobile-suggestions-title">💡 Popular questions</p>
+            <div className="mobile-suggestions-grid">
+              {suggestions.map(([label, q]) => (
+                <button key={label} type="button" className="mobile-suggestion-chip" onClick={() => send(q)}>
+                  <strong>{label}</strong>
+                  <span>{q}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {messages.map((m, i) => <div key={i} className={`message-row ${m.role}`}>
           <div className="message-avatar">{m.role === 'assistant' ? 'Q' : guest ? 'GU' : 'ST'}</div>
           <div>
@@ -198,8 +236,8 @@ export function AdvisorChat({ auth, suggestions = [] }) {
               ? (m.text
                 ? <AnswerBubble text={m.text} error={m.error} />
                 : m.streaming && <div className="message-bubble typing" aria-hidden="true"><span /><span /><span /></div>)
-              : <div className="message-bubble">{m.text}</div>}
-            {m.streaming && m.stage && <small className="message-meta" role="status">{stageText(m.stage)}</small>}
+              : <div className="message-bubble" dir="auto">{m.text}</div>}
+            {m.streaming && m.stage && <small className="message-meta" dir="auto" role="status">{stageText(m.stage)}</small>}
             {m.meta && <small className="message-meta">{m.meta}</small>}
             {!m.streaming && <Sources sources={m.sources} />}
             {!m.streaming && !!m.followups?.length && <div className="followups" role="group" aria-label={m.followupTitle || 'Related questions'}>
@@ -214,12 +252,58 @@ export function AdvisorChat({ auth, suggestions = [] }) {
       <button className={`scroll-to-bottom ${showScrollButton ? 'visible' : ''}`} onClick={scrollToBottom} aria-label="Scroll to bottom">↓</button>
       <div className="composer-wrapper">
         <div className="composer">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent?.isComposing && send()} placeholder={urdu ? 'اپنا تعلیمی سوال پوچھیں…' : 'Ask an academic question…'} maxLength={1200} />
+          <input dir={urdu ? 'rtl' : 'ltr'} lang={urdu ? 'ur' : 'en'} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent?.isComposing && send()} placeholder={urdu ? 'اپنا تعلیمی سوال پوچھیں…' : 'Ask an academic question…'} maxLength={1200} />
           <button onClick={() => send()} disabled={sending} aria-label="Send query">↑</button>
         </div>
         <small className="privacy">{guest ? 'This guest conversation is not stored. Sign in to enable History. ' : ''}Answers come from the department's published pages and documents, with sources. Please confirm important decisions with the department office.</small>
       </div>
     </div>
     <aside className="suggestions"><p className="eyebrow">QUICK START</p><h3>Popular questions</h3>{suggestions.map(([label, q]) => <button key={label} onClick={() => send(q)}><span>{label}</span><b>›</b><small>{q}</small></button>)}</aside>
+
+    {showHistoryMobile && !guest && (
+      <div className="mobile-sheet-overlay" onClick={() => setShowHistoryMobile(false)}>
+        <div className="mobile-sheet-content" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-sheet-header">
+            <h3>Conversations</h3>
+            <button 
+              type="button"
+              className="mobile-sheet-close" 
+              onClick={() => setShowHistoryMobile(false)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mobile-sheet-actions">
+            <button 
+              type="button"
+              onClick={() => { newChat(); setShowHistoryMobile(false); }} 
+              className="new-chat-btn" 
+              disabled={sending}
+              style={{ width: '100%', padding: '10px', fontSize: '13px' }}
+            >
+              + New Chat
+            </button>
+          </div>
+          <div className="session-list mobile-sheet-list">
+            {sessions.length === 0 ? (
+              <div className="session-empty" style={{ padding: '20px', textAlign: 'center', color: '#728c89' }}>No saved conversations yet.</div>
+            ) : (
+              sessions.map((s) => (
+                <button 
+                  key={s.id} 
+                  type="button"
+                  className={`session-item ${s.id === conversationId ? 'active' : ''}`} 
+                  onClick={() => { loadSession(s.id); setShowHistoryMobile(false); }}
+                >
+                  <div className="session-title">{s.title || `Chat ${new Date(s.created_at).toLocaleDateString()}`}</div>
+                  <div className="session-time">{new Date(s.updated_at).toLocaleTimeString()}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    )}
   </section>
 }

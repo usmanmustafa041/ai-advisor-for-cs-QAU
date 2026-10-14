@@ -146,20 +146,134 @@ function AuthScreen({ online, onAuthenticated, onGuest }) {
 }
 
 function Shell({ auth, online, active, setActive, onLogout, children }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const admin = auth.user.role === 'admin'
   const guest = auth.user.role === 'guest'
   const studentNav = guest ? ['Chat', 'Study Plan', 'Courses', 'Fees', 'Timetable', 'Policies'] : ['Chat', 'Study Plan', 'Courses', 'Fees', 'Timetable', 'Policies', 'History']
-  const adminNav = ['Dashboard', 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports']
+  const adminNav = ['Dashboard', ...(CHAT_ENGINE === 'advisor' ? ['Chatbot Engine'] : []), 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports']
   const items = admin ? adminNav : studentNav
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <QauBrand context={admin ? 'Administration' : 'AI Academic Advisor'} compact />
-      <div className="profile-card"><div className="avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div><div><strong>{auth.user.email}</strong><small>{admin ? 'Administrator' : guest ? 'Guest · history off' : 'Student account'}</small></div><span className="status-dot" /></div>
-      <nav>{items.map((item) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="icon" aria-hidden="true">{admin ? '◇' : '•'}</span>{item}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="source-note"><span>✓</span><div><strong>QAU source library</strong><small>Check source, scheme and date</small></div></div>{guest && <div className="guest-save-note">Sign in to save and revisit your conversations.</div>}<button className="nav-item" onClick={onLogout}><span className="icon">↪</span>{guest ? 'Sign in' : 'Log out'}</button></div>
+  const navIcons = { 'Chatbot Engine': '✨', Dashboard: '📊', CMS: '🧠', Courses: '📚', Prerequisites: '🔗', Fees: '💰', Timetables: '🗓️', Policies: '📋', Knowledge: '📖', 'Ingestion Review': '🔍', 'Timetable Management': '🗓️', 'Query Logs': '🔍', Users: '👥', Model: '🤖', Settings: '⚙️', Reports: '📈', Chat: '💬', 'Study Plan': '📑', Timetable: '🗓️', History: '🕒' }
+
+  const handleNavClick = (item) => {
+    setActive(item)
+    setMobileMenuOpen(false)
+  }
+
+  return <div className={`app-shell ${mobileMenuOpen ? 'mobile-menu-open' : ''}`}>
+    {mobileMenuOpen && (
+      <div 
+        className="mobile-backdrop" 
+        onClick={() => setMobileMenuOpen(false)} 
+        aria-hidden="true" 
+      />
+    )}
+
+    {/* Mobile Header */}
+    <header className="mobile-header">
+      <button 
+        type="button"
+        className="mobile-menu-btn" 
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label={mobileMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+        aria-expanded={mobileMenuOpen}
+      >
+        <span className="hamburger-box" aria-hidden="true">
+          <span className="hamburger-line" />
+          <span className="hamburger-line" />
+          <span className="hamburger-line" />
+        </span>
+      </button>
+
+      <a className="mobile-brand" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer" aria-label="Department of Computer Sciences, Quaid-i-Azam University">
+        <img className="mobile-crest" src="/qau-logo.png" alt="" />
+        <span className="mobile-brand-title">QAU CS Advisor</span>
+      </a>
+
+      <div className="mobile-header-actions">
+        <span className={online ? 'connection online' : 'connection'} title={online ? 'Services online' : 'Offline'}>
+          <i />
+        </span>
+        <div className="mini-avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div>
+      </div>
+    </header>
+
+    {/* Quick scrollable tabs for mobile */}
+    <nav className="mobile-quick-nav" aria-label="Quick navigation">
+      {items.map((item) => (
+        <button
+          key={item}
+          type="button"
+          className={active === item ? 'quick-nav-item active' : 'quick-nav-item'}
+          onClick={() => handleNavClick(item)}
+        >
+          {item}
+        </button>
+      ))}
+    </nav>
+
+    {/* Sidebar drawer on mobile / fixed sidebar on desktop */}
+    <aside className={`sidebar ${mobileMenuOpen ? 'open' : ''}`}>
+      <div className="mobile-sidebar-header">
+        <QauBrand context={admin ? 'Administration' : 'AI Academic Advisor'} compact />
+        <button 
+          type="button"
+          className="mobile-close-btn" 
+          onClick={() => setMobileMenuOpen(false)} 
+          aria-label="Close navigation"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="profile-card">
+        <div className="avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div>
+        <div>
+          <strong>{auth.user.email}</strong>
+          <small>{admin ? 'Administrator' : guest ? 'Guest · history off' : 'Student account'}</small>
+        </div>
+        <span className="status-dot" />
+      </div>
+      <nav>
+        {items.map((item) => (
+          <button 
+            key={item} 
+            className={active === item ? 'nav-item active' : 'nav-item'} 
+            onClick={() => handleNavClick(item)}
+          >
+            <span className="icon" aria-hidden="true">{navIcons[item] || (admin ? '◇' : '•')}</span>
+            {item}
+          </button>
+        ))}
+      </nav>
+      <div className="sidebar-bottom">
+        <div className="source-note">
+          <span>✓</span>
+          <div>
+            <strong>{admin ? 'Admin access' : 'QAU source library'}</strong>
+            <small>{admin ? 'Full system control' : 'Check source, scheme and date'}</small>
+          </div>
+        </div>
+        <a className="sidebar-official-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a>
+        {guest && <div className="guest-save-note">Sign in to save and revisit your conversations.</div>}
+        <button className="nav-item logout-btn" onClick={onLogout}>
+          <span className="icon">↪</span>
+          {guest ? 'Sign in' : 'Log out'}
+        </button>
+      </div>
     </aside>
+
     <main className="main-content">
-      <header className="topbar"><div><p className="eyebrow">{admin ? 'ADMINISTRATION' : guest ? 'GUEST ADVISOR' : 'STUDENT PORTAL'} / {active.toUpperCase()}</p><h1>{active}</h1><span className="topbar-subtitle">Department of Computer Sciences</span></div><div className="top-actions"><a className="official-site-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Services online' : 'Offline'}</span><div className="mini-avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div></div></header>
+      <header className="topbar desktop-only">
+        <div>
+          <p className="eyebrow">{admin ? 'ADMINISTRATION' : guest ? 'GUEST ADVISOR' : 'STUDENT PORTAL'} / {active.toUpperCase()}</p>
+          <h1>{active}</h1>
+          <span className="topbar-subtitle">Department of Computer Sciences</span>
+        </div>
+        <div className="top-actions">
+          <a className="official-site-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a>
+          <span className={online ? 'connection online' : 'connection'}><i />{online ? 'Services online' : 'Offline'}</span>
+          <div className="mini-avatar">{admin ? 'AD' : guest ? 'GU' : 'ST'}</div>
+        </div>
+      </header>
       {children}
     </main>
   </div>
@@ -208,6 +322,7 @@ function Chat({ auth }) {
   const [messages, setMessages] = useState(defaultMessages)
   const [input, setInput] = useState(''); const [sending, setSending] = useState(false); const [sessionId, setSessionId] = useState(null); const [contextCourseCode, setContextCourseCode] = useState(null); const [language, setLanguage] = useState('en')
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [showHistoryMobile, setShowHistoryMobile] = useState(false)
   const scrollRef = React.useRef(null)
   const urdu = language === 'ur'
   
@@ -270,7 +385,7 @@ function Chat({ auth }) {
     finally { setSending(false) }
   }
   
-  return <section className={`chat-layout ${!guest ? 'with-sidebar' : ''}`} dir={urdu ? 'rtl' : 'ltr'}>
+  return <section className={`chat-layout ${!guest ? 'with-sidebar' : ''}`} dir="ltr">
     {!guest && <aside className="chat-history-sidebar">
       <div className="chat-sidebar-header">
         <h3>Conversations</h3>
@@ -286,12 +401,49 @@ function Chat({ auth }) {
       </div>
     </aside>}
     <div className="chat-panel">
-      <div className="chat-toolbar"><span>{guest ? 'Guest conversation · not saved' : 'Private authenticated conversation · history enabled'}</span><button className="language-toggle" onClick={() => setLanguage(urdu ? 'en' : 'ur')}>{urdu ? 'English' : 'اردو'}</button></div>
+      <div className="chat-toolbar">
+        <div className="chat-toolbar-left">
+          {!guest && (
+            <button 
+              type="button" 
+              className="chat-history-toggle-btn mobile-only" 
+              onClick={() => setShowHistoryMobile(true)}
+              aria-label="View conversations"
+            >
+              💬 Chats {sessions.length > 0 ? `(${sessions.length})` : ''}
+            </button>
+          )}
+          <button 
+            type="button" 
+            className="chat-new-mobile-btn mobile-only" 
+            onClick={newChat} 
+            disabled={sending}
+            aria-label="New chat"
+          >
+            + New
+          </button>
+          <span>{guest ? 'Guest conversation · not saved' : 'Private authenticated conversation · history enabled'}</span>
+        </div>
+        <button className="language-toggle" onClick={() => setLanguage(urdu ? 'en' : 'ur')}>{urdu ? 'English' : 'اردو'}</button>
+      </div>
       <div className="chat-scroll" ref={scrollRef} onScroll={handleScroll}>
+        {messages.length === 1 && suggestions?.length > 0 && (
+          <div className="mobile-chat-suggestions">
+            <p className="mobile-suggestions-title">💡 Popular questions</p>
+            <div className="mobile-suggestions-grid">
+              {suggestions.map(([label, q]) => (
+                <button key={label} type="button" className="mobile-suggestion-chip" onClick={() => send(q)}>
+                  <strong>{label}</strong>
+                  <span>{q}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {messages.map((m, i) => <div key={i} className={`message-row ${m.role}`}>
           <div className="message-avatar">{m.role === 'assistant' ? 'Q' : guest ? 'GU' : 'ST'}</div>
           <div>
-            {m.role === 'assistant' ? <div className="message-bubble" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(m.text), { FORBID_TAGS: ['img', 'iframe', 'style', 'form', 'input', 'button'] }) }} /> : <div className="message-bubble">{m.text}</div>}
+            {m.role === 'assistant' ? <div className="message-bubble" dir="auto" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked.parse(m.text), { FORBID_TAGS: ['img', 'iframe', 'style', 'form', 'input', 'button'] }) }} /> : <div className="message-bubble" dir="auto">{m.text}</div>}
             {m.meta && <small className="message-meta">{m.meta}</small>}
             {m.citations?.map((c, n) => <details className="evidence-source" key={c.chunk_id || `${c.source_code}-${n}`}><summary>[{c.number || n + 1}] {c.title || c.source_code}{c.page_number ? ` · p. ${c.page_number}` : ''}{c.effective_term ? ` · ${c.effective_term}` : ''}</summary>{c.quotes?.map((quote, i) => <blockquote key={i}>{quote}</blockquote>)}{c.captured_at && <small>Archived: {c.captured_at}</small>}{/^https?:\/\//i.test(c.source_url || '') && <a className="citation" href={c.source_url} target="_blank" rel="noreferrer">Open official source ↗</a>}</details>)}
             {!!m.notices?.length && <details className="evidence-notices"><summary>Source and availability notes</summary><ul>{m.notices.map((notice, n) => <li key={n}>{notice}</li>)}</ul></details>}
@@ -303,13 +455,59 @@ function Chat({ auth }) {
       <button className={`scroll-to-bottom ${showScrollButton ? 'visible' : ''}`} onClick={scrollToBottom} aria-label="Scroll to bottom">↓</button>
       <div className="composer-wrapper">
         <div className="composer">
-          <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder={urdu ? 'اپنا تعلیمی سوال پوچھیں…' : 'Ask an academic question…'} />
+          <input dir={urdu ? 'rtl' : 'ltr'} lang={urdu ? 'ur' : 'en'} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder={urdu ? 'اپنا تعلیمی سوال پوچھیں…' : 'Ask an academic question…'} />
           <button onClick={() => send()} disabled={sending} aria-label="Send query">↑</button>
         </div>
         <small className="privacy">{guest ? 'This guest conversation is not stored. Sign in to enable History. ' : ''}Answers use available records and clearly identify demo or unverified information.</small>
       </div>
     </div>
     <aside className="suggestions"><p className="eyebrow">QUICK START</p><h3>Popular questions</h3>{suggestions.map(([label, q]) => <button key={label} onClick={() => send(q)}><span>{label}</span><b>›</b><small>{q}</small></button>)}</aside>
+
+    {showHistoryMobile && !guest && (
+      <div className="mobile-sheet-overlay" onClick={() => setShowHistoryMobile(false)}>
+        <div className="mobile-sheet-content" onClick={(e) => e.stopPropagation()}>
+          <div className="mobile-sheet-header">
+            <h3>Conversations</h3>
+            <button 
+              type="button"
+              className="mobile-sheet-close" 
+              onClick={() => setShowHistoryMobile(false)}
+              aria-label="Close"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="mobile-sheet-actions">
+            <button 
+              type="button"
+              onClick={() => { newChat(); setShowHistoryMobile(false); }} 
+              className="new-chat-btn" 
+              disabled={sending}
+              style={{ width: '100%', padding: '10px', fontSize: '13px' }}
+            >
+              + New Chat
+            </button>
+          </div>
+          <div className="session-list mobile-sheet-list">
+            {sessions.length === 0 ? (
+              <div className="session-empty" style={{ padding: '20px', textAlign: 'center', color: '#728c89' }}>No saved conversations yet.</div>
+            ) : (
+              sessions.map((s) => (
+                <button 
+                  key={s.id} 
+                  type="button"
+                  className={`session-item ${s.id === sessionId ? 'active' : ''}`} 
+                  onClick={() => { loadSession(s.id); setShowHistoryMobile(false); }}
+                >
+                  <div className="session-title">{s.title || `Chat ${new Date(s.created_at).toLocaleDateString()}`}</div>
+                  <div className="session-time">{new Date(s.updated_at).toLocaleTimeString()}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    )}
   </section>
 }
 
@@ -350,19 +548,9 @@ function History({ auth }) {
 
 function AdminPortal({ auth, online, onLogout }) {
   const [active, setActive] = useState('Dashboard')
-  const navIcons = { 'Chatbot Engine': '✨', Dashboard: '📊', CMS: '🧠', Courses: '📚', Prerequisites: '🔗', Fees: '💰', Timetables: '🗓️', Policies: '📋', Knowledge: '📖', 'Query Logs': '🔍', Users: '👥', Model: '🤖', Settings: '⚙️', Reports: '📈' }
-  return <div className="app-shell">
-    <aside className="sidebar">
-      <QauBrand context="Administration" compact />
-      <div className="profile-card"><div className="avatar">AD</div><div><strong>{auth.user.email}</strong><small>Administrator</small></div><span className="status-dot" /></div>
-      <nav>{['Dashboard', ...(CHAT_ENGINE === 'advisor' ? ['Chatbot Engine'] : []), 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports'].map((item) => <button key={item} className={active === item ? 'nav-item active' : 'nav-item'} onClick={() => setActive(item)}><span className="icon" aria-hidden="true">{navIcons[item] || '◇'}</span>{item}</button>)}</nav>
-      <div className="sidebar-bottom"><div className="source-note"><span>✓</span><div><strong>Admin access</strong><small>Full system control</small></div></div><button className="nav-item" onClick={onLogout}><span className="icon">↪</span>Log out</button></div>
-    </aside>
-    <main className="main-content">
-      <header className="topbar"><div><p className="eyebrow">ADMINISTRATION / {active.toUpperCase()}</p><h1>{active}</h1><span className="topbar-subtitle">Department of Computer Sciences</span></div><div className="top-actions"><a className="official-site-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Services online' : 'Offline'}</span><div className="mini-avatar">AD</div></div></header>
-      <div className="page-content-wrapper">{active === 'Dashboard' ? <AdminDashboard auth={auth} setActive={setActive} /> : active === 'Chatbot Engine' ? <AdvisorAdmin auth={auth} /> : active === 'Timetable Management' && import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? <TimetableManagement auth={auth} /> : active === 'Ingestion Review' ? <KnowledgeReview request={(path, options) => api(path, options, auth)} /> : active === 'CMS' ? <CMSManager auth={auth} /> : active === 'Reports' ? (CHAT_ENGINE === 'advisor' ? <AdvisorReports auth={auth} /> : <Reports auth={auth} />) : active === 'Query Logs' ? (CHAT_ENGINE === 'advisor' ? <AdvisorQueryLogs auth={auth} /> : <QueryLogs auth={auth} />) : active === 'Model' ? <ModelManager auth={auth} /> : active === 'Settings' ? <SettingsManager auth={auth} /> : <AdminRecords auth={auth} module={active} />}</div>
-    </main>
-  </div>
+  return <Shell auth={auth} online={online} active={active} setActive={setActive} onLogout={onLogout}>
+    <div className="page-content-wrapper">{active === 'Dashboard' ? <AdminDashboard auth={auth} setActive={setActive} /> : active === 'Chatbot Engine' ? <AdvisorAdmin auth={auth} /> : active === 'Timetable Management' && import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? <TimetableManagement auth={auth} /> : active === 'Ingestion Review' ? <KnowledgeReview request={(path, options) => api(path, options, auth)} /> : active === 'CMS' ? <CMSManager auth={auth} /> : active === 'Reports' ? (CHAT_ENGINE === 'advisor' ? <AdvisorReports auth={auth} /> : <Reports auth={auth} />) : active === 'Query Logs' ? (CHAT_ENGINE === 'advisor' ? <AdvisorQueryLogs auth={auth} /> : <QueryLogs auth={auth} />) : active === 'Model' ? <ModelManager auth={auth} /> : active === 'Settings' ? <SettingsManager auth={auth} /> : <AdminRecords auth={auth} module={active} />}</div>
+  </Shell>
 }
 
 const adminConfig = {

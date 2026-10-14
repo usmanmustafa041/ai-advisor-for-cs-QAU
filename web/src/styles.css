@@ -122,5 +122,13 @@ button.link { background: none !important; color: var(--brand) !important; borde
 .fb { border-left: 4px solid var(--line); padding: 8px 12px; margin: 10px 0; background: var(--bg); border-radius: 6px; } .fb.neg { border-color: var(--err); } .fb.pos { border-color: var(--ok); }
 .fb .ans { color: var(--muted); max-height: 5.5em; overflow: hidden; } .fb .comment { font-style: italic; margin-top: 4px; }
 
-@media (max-width: 560px) { .brand p { display: none; } .welcome { padding-top: 4vh; } .chip { font-size: .85rem; } }
+@media (max-width: 560px) {
+  .app { padding: 0 12px; }
+  .brand p { display: none; }
+  .welcome { padding-top: 4vh; }
+  .chip { font-size: .85rem; padding: 7px 12px; }
+  .box textarea { font-size: 16px !important; }
+  .composer { padding: 6px 0 max(10px, env(safe-area-inset-bottom, 10px)); }
+  .msg.user .bubble { max-width: 90%; }
+}
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; scroll-behavior: auto !important; } }

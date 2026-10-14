@@ -94,14 +94,14 @@ export function ChatV3({ auth }) {
     setStatus(response.ok ? 'Feedback saved for review.' : 'Feedback could not be saved.')
   }
 
-  return <section className={`chat-layout ${signedIn ? 'with-sidebar' : ''}`} dir={language === 'urdu' ? 'rtl' : 'ltr'}>
+  return <section className={`chat-layout ${signedIn ? 'with-sidebar' : ''}`} dir="ltr">
     {signedIn && <aside className="chat-history-sidebar"><h3>Conversations</h3>{sessions.map(s => <div key={s.id}><button className="session-item" onClick={() => loadSession(s.id)} disabled={sending}>{s.title}</button><button onClick={() => deleteSession(s)} disabled={sending} aria-label={`Delete conversation ${s.title}`}>Delete</button></div>)}</aside>}
     <div className="chat-panel">
       <div className="chat-toolbar"><span>Replacement preview · {signedIn ? 'Private saved history' : 'Temporary guest conversation'}</span><button disabled={sending} onClick={() => { setConversationId(null); setMessages([]) }}>New chat</button><label>Language <select aria-label="Response language" value={language} onChange={e => setLanguage(e.target.value)}><option value="">Match my message</option><option value="english">English</option><option value="roman_urdu">Roman Urdu</option><option value="urdu">اردو</option></select></label></div>
       <div className="chat-scroll" ref={scroll} aria-live="polite" aria-busy={sending}>
-        {!messages.length && <div className="message-row assistant"><div className="message-avatar">Q</div><div className="message-bubble">Hi! Ask me about your QAU CS studies, or a computing concept you want explained.</div></div>}
+        {!messages.length && <div className="message-row assistant"><div className="message-avatar">Q</div><div className="message-bubble" dir="auto">Hi! Ask me about your QAU CS studies, or a computing concept you want explained.</div></div>}
         {messages.map((m, i) => <div className={`message-row ${m.role}`} key={m.localId || i}><div className="message-avatar">{m.role === 'assistant' ? 'Q' : 'You'}</div><div>
-          {m.role === 'assistant' ? <div className="message-bubble" dangerouslySetInnerHTML={{ __html: renderAnswer(m) }} /> : <div className="message-bubble">{m.text}</div>}
+          {m.role === 'assistant' ? <div className="message-bubble" dir="auto" dangerouslySetInnerHTML={{ __html: renderAnswer(m) }} /> : <div className="message-bubble" dir="auto">{m.text}</div>}
           {m.error && <p role="alert" className="form-error">{m.error}</p>}
           {m.latency_ms != null && <small className="message-meta">{m.groundedness_status === 'general_explanation' ? 'General explanation' : m.groundedness_status === 'clarification' ? 'Clarification' : m.cited_sources?.length ? 'Answer with source citations' : 'Source information unavailable'} · {(m.latency_ms / 1000).toFixed(1)}s</small>}
           {!!observedResources(m.cited_sources).length && <div className="evidence-notices"><strong>Official forms and services</strong><ul>{observedResources(m.cited_sources).map(r => <li key={r.url}><a href={r.url} target="_blank" rel="noreferrer">{r.title} ↗</a></li>)}</ul></div>}
@@ -111,7 +111,7 @@ export function ChatV3({ auth }) {
         </div></div>)}
         {!!status && <p role="status" className="message-meta">{status}</p>}
       </div>
-      <form className="composer-wrapper" onSubmit={e => { e.preventDefault(); send() }}><div className="composer"><input aria-label="Ask an academic question" maxLength={4000} value={input} onChange={e => setInput(e.target.value)} placeholder="Ask an academic question…" />{sending ? <button type="button" onClick={() => controller.current?.abort()} aria-label="Stop answer">■</button> : <button type="submit" aria-label="Send query" disabled={!input.trim()}>↑</button>}</div><small className="privacy">{signedIn ? 'Saved conversations are visible only to your account.' : 'Guest history expires and is not saved to disk.'} Check the cited scheme, term and review status.</small></form>
+      <form className="composer-wrapper" onSubmit={e => { e.preventDefault(); send() }}><div className="composer"><input aria-label="Ask an academic question" dir={language === 'urdu' ? 'rtl' : 'ltr'} lang={language === 'urdu' ? 'ur' : 'en'} maxLength={4000} value={input} onChange={e => setInput(e.target.value)} placeholder="Ask an academic question…" />{sending ? <button type="button" onClick={() => controller.current?.abort()} aria-label="Stop answer">■</button> : <button type="submit" aria-label="Send query" disabled={!input.trim()}>↑</button>}</div><small className="privacy">{signedIn ? 'Saved conversations are visible only to your account.' : 'Guest history expires and is not saved to disk.'} Check the cited scheme, term and review status.</small></form>
     </div>
     <aside className="suggestions"><p className="eyebrow">TRY A CONVERSATION</p><h3>Start here</h3>{['5th sem ke subjects btado fall 2024 batch', 'CS ki faculty me NLP research kon karta ha', 'What is recursion? Explain with an example.'].map(q => <button key={q} disabled={sending} onClick={() => send(q)}>{q}</button>)}</aside>
   </section>

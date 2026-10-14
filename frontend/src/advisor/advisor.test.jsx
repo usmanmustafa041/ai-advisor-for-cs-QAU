@@ -112,7 +112,11 @@ describe('AdvisorChat', () => {
 
   it('asks for Urdu answers when the toggle is on', async () => {
     render(<AdvisorChat auth={guest} suggestions={[]} />)
+    const chat = document.querySelector('.chat-layout')
+    expect(chat).toHaveAttribute('dir', 'ltr')
     fireEvent.click(screen.getByRole('button', { name: 'اردو' }))
+    expect(chat).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByRole('textbox')).toHaveAttribute('dir', 'rtl')
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'fee' } })
     fireEvent.click(screen.getByRole('button', { name: /Send query/i }))
     await screen.findByText(/PSP is a prerequisite/)
