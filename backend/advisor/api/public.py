@@ -6,9 +6,10 @@ import json
 import logging
 import re
 import uuid
+from datetime import date, timedelta
 from collections.abc import AsyncIterator
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -60,6 +61,15 @@ async def require_user(request: Request) -> User:
     user = await resolve_user(request)
     if user is None:
         raise HTTPException(status_code=401, detail="Sign in to use this feature")
+    return user
+
+
+async def require_admin(request: Request) -> User:
+    user = await resolve_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in to use this feature")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Administrator role required")
     return user
 
 
@@ -229,6 +239,117 @@ async def my_history(search: str = "", user: User = Depends(require_user), ctx: 
 async def clear_my_history(user: User = Depends(require_user), ctx: Context = Depends(get_ctx)):
     ctx.db.execute("DELETE FROM conversations WHERE owner_id=?", (user.id,))
     return {"ok": True}
+
+
+@router.get("/admin/analytics/query-logs")
+async def admin_query_logs(
+    search: str = "",
+    user_ids: str = "",
+    start: date | None = None,
+    end: date | None = None,
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: User = Depends(require_admin),
+    ctx: Context = Depends(get_ctx),
+):
+    if start and end and end < start:
+        raise HTTPException(status_code=422, detail="End date cannot precede start date")
+    filters = []
+    params: list[object] = []
+    if search.strip():
+        filters.append("(q.question LIKE ? COLLATE NOCASE OR q.outcome LIKE ? COLLATE NOCASE)")
+        params.extend((f"%{search.strip()}%", f"%{search.strip()}%"))
+    owner_ids = [value for value in user_ids.split(",") if value]
+    if len(owner_ids) > 500:
+        raise HTTPException(status_code=422, detail="Too many users selected for this filter")
+    if owner_ids:
+        filters.append(f"q.owner_id IN ({','.join('?' for _ in owner_ids)})")
+        params.extend(owner_ids)
+    if start:
+        filters.append("q.created_at >= ?")
+        params.append(f"{start.isoformat()}T00:00:00")
+    if end:
+        filters.append("q.created_at < ?")
+        params.append(f"{(end + timedelta(days=1)).isoformat()}T00:00:00")
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    rows = ctx.db.all(
+        f"""SELECT q.id, q.question AS content, q.outcome, q.latency_ms,
+            q.created_at, q.owner_id AS user_id, q.conversation_id AS session_id
+        FROM query_log q
+        {where}
+        ORDER BY q.created_at DESC, q.id DESC LIMIT ? OFFSET ?""",
+        (*params, limit, offset),
+    )
+    return [dict(row) for row in rows]
+
+
+@router.get("/admin/analytics/report")
+async def admin_analytics_report(
+    start: date | None = None,
+    end: date | None = None,
+    _: User = Depends(require_admin),
+    ctx: Context = Depends(get_ctx),
+):
+    if start and end and end < start:
+        raise HTTPException(status_code=422, detail="End date cannot precede start date")
+    filters = []
+    params: list[object] = []
+    if start:
+        filters.append("q.created_at >= ?")
+        params.append(f"{start.isoformat()}T00:00:00")
+    if end:
+        filters.append("q.created_at < ?")
+        params.append(f"{(end + timedelta(days=1)).isoformat()}T00:00:00")
+    where = f"WHERE {' AND '.join(filters)}" if filters else ""
+    counts = ctx.db.one(
+        f"""SELECT COUNT(*) AS total_messages,
+            COUNT(DISTINCT q.conversation_id) AS total_sessions,
+            COUNT(DISTINCT q.outcome) AS intents_seen,
+            MIN(q.created_at) AS first_message, MAX(q.created_at) AS last_message,
+            CAST(ROUND(AVG(q.latency_ms)) AS INTEGER) AS average_response_ms
+        FROM query_log q {where}""",
+        params,
+    )
+    outcomes = ctx.db.all(
+        f"""SELECT COALESCE(q.outcome, 'unknown') AS intent, COUNT(*) AS count
+        FROM query_log q {where} GROUP BY q.outcome ORDER BY count DESC""",
+        params,
+    )
+    duration = ctx.db.scalar(
+        f"""SELECT ROUND(AVG((julianday(c.updated_at)-julianday(c.created_at))*1440), 2)
+        FROM conversations c
+        WHERE EXISTS (
+            SELECT 1 FROM query_log q
+            WHERE q.conversation_id=c.id {'AND ' + ' AND '.join(filters) if filters else ''}
+        )""",
+        params,
+    )
+    return {
+        **dict(counts),
+        "average_session_minutes": duration or 0,
+        "by_intent": [dict(row) for row in outcomes],
+        "warning": "No query data exists for the selected range."
+        if counts["total_messages"] == 0 else None,
+    }
+
+
+@router.delete("/admin/users/{user_id}/data")
+async def delete_user_advisor_data(
+    user_id: str,
+    _: User = Depends(require_admin),
+    ctx: Context = Depends(get_ctx),
+):
+    conversation_ids = ctx.db.all("SELECT id FROM conversations WHERE owner_id=?", (user_id,))
+    ctx.db.execute("DELETE FROM query_log WHERE owner_id=?", (user_id,))
+    ctx.db.execute(
+        """DELETE FROM feedback WHERE message_id IN (
+            SELECT m.id FROM messages m JOIN conversations c ON c.id=m.conversation_id
+            WHERE c.owner_id=?
+        )""",
+        (user_id,),
+    )
+    ctx.db.execute("DELETE FROM conversations WHERE owner_id=?", (user_id,))
+    return {"deleted_conversations": len(conversation_ids)}
 
 
 async def _check_feedback_target(ctx: Context, request: Request, message_id: str) -> None:

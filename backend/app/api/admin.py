@@ -81,6 +81,13 @@ class SettingUpdate(BaseModel):
     value: object
 
 
+class UserCreate(BaseModel):
+    full_name: str = Field(min_length=2, max_length=200)
+    email: str = Field(min_length=3, max_length=320)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(default="student", pattern="^(student|admin)$")
+
+
 def _audit(db: Session, user_id: str, action: str, entity_type: str, entity_id: str, before=None, after=None) -> None:
     db.execute(text("""INSERT INTO audit_log
         (actor_user_id, action, entity_type, entity_id, before_data, after_data)
@@ -392,7 +399,9 @@ def create_course(payload: CourseCreate, user: dict = Depends(admin_user), db: S
     row = db.execute(text("""INSERT INTO courses
         (code, title, description, theory_credit_hours, lab_credit_hours, source_id)
         VALUES (upper(:code), :title, :description, :theory, :lab, CAST(:source_id AS uuid))
-        RETURNING code, title, description, theory_credit_hours, lab_credit_hours, active"""),
+        RETURNING code, title, description,
+                  theory_credit_hours::double precision AS theory_credit_hours,
+                  lab_credit_hours::double precision AS lab_credit_hours, active"""),
         {"code": payload.code.strip(), "title": payload.title, "description": payload.description,
          "theory": payload.theory_credit_hours, "lab": payload.lab_credit_hours, "source_id": payload.source_id}).mappings().one()
     result = dict(row); _audit(db, user["id"], "create", "course", result["code"], after=result); _commit(db, "Course code already exists")
@@ -531,6 +540,28 @@ def users(_: dict = Depends(admin_user), db: Session = Depends(get_db)) -> list[
         FROM app_users ORDER BY created_at DESC""")).mappings()]
 
 
+@router.post("/users", status_code=201)
+def create_user(payload: UserCreate, admin: dict = Depends(admin_user), db: Session = Depends(get_db)) -> dict:
+    try:
+        row = db.execute(text("""INSERT INTO app_users (full_name, email, password_hash, role)
+            VALUES (:full_name, :email, :password_hash, :role)
+            RETURNING id::text, full_name, email, role, active,
+                last_login_at::text AS last_login_at, created_at::text AS created_at"""), {
+            "full_name": payload.full_name.strip(),
+            "email": payload.email.lower().strip(),
+            "password_hash": hash_password(payload.password),
+            "role": payload.role,
+        }).mappings().one()
+        result = dict(row)
+        _audit(db, admin["id"], "create", "user", result["id"],
+               after={k: result[k] for k in ("full_name", "email", "role", "active")})
+        _commit(db, "Email is already registered")
+        return result
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Email is already registered") from None
+
+
 @router.patch("/users/{user_id}")
 def update_user(user_id: str, payload: dict, admin: dict = Depends(admin_user), db: Session = Depends(get_db)) -> dict:
     allowed = {"full_name", "email", "role", "active", "password"}; updates = {k: v for k, v in payload.items() if k in allowed}
@@ -542,6 +573,28 @@ def update_user(user_id: str, payload: dict, admin: dict = Depends(admin_user), 
     row = db.execute(text(f"UPDATE app_users SET {assignments}, updated_at=NOW() WHERE id=:id RETURNING id::text, email, role, active"), updates).mappings().one_or_none()
     if not row: raise HTTPException(status_code=404, detail="User not found")
     result = dict(row); _audit(db, admin["id"], "update", "user", user_id, after=result); _commit(db, "Email is already registered"); return result
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: str, admin: dict = Depends(admin_user), db: Session = Depends(get_db)) -> dict:
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=422, detail="Administrators cannot delete their own account")
+    row = db.execute(text("""SELECT id::text, full_name, email, role, active
+        FROM app_users WHERE id=:id"""), {"id": user_id}).mappings().one_or_none()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    try:
+        db.execute(text("DELETE FROM chat_sessions WHERE user_id=:id"), {"id": user_id})
+        db.execute(text("DELETE FROM app_users WHERE id=:id"), {"id": user_id})
+        _audit(db, admin["id"], "delete", "user", user_id, before=dict(row))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="This user has linked academic records and cannot be deleted; deactivate the account instead",
+        ) from None
+    return {"deleted": True, "id": user_id}
 
 
 def _query_log_rows(db: Session, search: str | None, email: str | None, start: date | None,
@@ -599,7 +652,7 @@ def report(start: date | None = None, end: date | None = None, _: dict = Depends
         WHERE role='user' AND (CAST(:start AS date) IS NULL OR created_at >= CAST(:start AS date)) AND (CAST(:end AS date) IS NULL OR created_at < CAST(:end AS date) + INTERVAL '1 day')
         GROUP BY intent ORDER BY count DESC"""), params).mappings()
     activity = db.execute(text("""SELECT COUNT(*)::int AS total_users,
-        COUNT(*) FILTER (WHERE last_login_at>=NOW()-INTERVAL '30 days')::int AS active_users_30d,
+        COUNT(*) FILTER (WHERE active AND last_login_at>=NOW()-INTERVAL '30 days')::int AS active_users_30d,
         MAX(last_login_at)::text AS latest_login FROM app_users WHERE role='student'""")).mappings().one()
     duration = db.execute(text("""SELECT ROUND(AVG(minutes),2) FROM (
         SELECT EXTRACT(EPOCH FROM (COALESCE(MAX(m.created_at), s.ended_at, s.started_at)-s.started_at))/60.0 AS minutes

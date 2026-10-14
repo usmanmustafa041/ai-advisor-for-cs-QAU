@@ -1,5 +1,6 @@
 import dataclasses
 import json
+from datetime import date, timedelta
 
 import httpx
 import numpy as np
@@ -135,6 +136,51 @@ def test_history_page_search_and_clear(env):
     assert client.delete("/api/v1/me/history", headers=A).status_code == 200
     assert client.get("/api/v1/me/history", headers=A).json() == []
     assert client.get("/api/v1/me/history", headers=B).json()  # B's history survives A's clear
+
+
+def test_admin_analytics_reads_advisor_conversations_and_enforces_admin_role(env):
+    client, ctx, _ = env
+    question = "QA verification: what are the prerequisites of Data Structures?"
+    chat(client, question, A)
+    assert client.delete("/api/v1/me/history", headers=A).status_code == 200
+
+    logs = client.get(
+        "/api/v1/admin/analytics/query-logs?user_ids=u1", headers=ADMIN
+    )
+    assert logs.status_code == 200
+    assert any(row["content"] == question and row["user_id"] == "u1" for row in logs.json())
+
+    report = client.get("/api/v1/admin/analytics/report", headers=ADMIN)
+    assert report.status_code == 200
+    assert report.json()["total_messages"] == 1
+    assert report.json()["total_sessions"] == 1
+    assert report.json()["warning"] is None
+    today = date.today().isoformat()
+    dated_report = client.get(
+        f"/api/v1/admin/analytics/report?start={today}&end={today}", headers=ADMIN
+    )
+    assert dated_report.status_code == 200
+    assert dated_report.json()["total_messages"] == 1
+    assert client.get(
+        f"/api/v1/admin/analytics/report?start={today}&end={(date.today() - timedelta(days=1)).isoformat()}",
+        headers=ADMIN,
+    ).status_code == 422
+
+    assert client.get("/api/v1/admin/analytics/report", headers=A).status_code == 403
+    assert ctx.db.scalar("SELECT COUNT(*) FROM query_log") == 1
+
+
+def test_admin_can_remove_a_users_advisor_history_and_query_logs(env):
+    client, ctx, _ = env
+    chat(client, "QA deletion verification: what are the prerequisites of Data Structures?", A)
+    assert ctx.db.scalar("SELECT COUNT(*) FROM conversations WHERE owner_id='u1'") == 1
+    assert ctx.db.scalar("SELECT COUNT(*) FROM query_log") == 1
+
+    response = client.delete("/api/v1/admin/users/u1/data", headers=ADMIN)
+    assert response.status_code == 200
+    assert response.json()["deleted_conversations"] == 1
+    assert ctx.db.scalar("SELECT COUNT(*) FROM conversations WHERE owner_id='u1'") == 0
+    assert ctx.db.scalar("SELECT COUNT(*) FROM query_log") == 0
 
 
 def test_feedback_component_routes_and_owner_check(env):

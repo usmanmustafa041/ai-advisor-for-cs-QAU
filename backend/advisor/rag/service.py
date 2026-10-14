@@ -121,8 +121,8 @@ class _Turn:
     the browser supplies the recent history and nothing is kept, except that a question the
     assistant could not answer is logged (without any identity) so the website can be improved."""
 
-    def __init__(self, svc: AdvisorService, cid: str | None, ephemeral: bool):
-        self.svc, self.cid, self.ephemeral = svc, cid, ephemeral
+    def __init__(self, svc: AdvisorService, cid: str | None, owner: str | None, ephemeral: bool):
+        self.svc, self.cid, self.owner, self.ephemeral = svc, cid, owner, ephemeral
 
     def store(self, role: str, content: str, meta: dict | None = None) -> str:
         if self.ephemeral or self.cid is None:
@@ -132,6 +132,8 @@ class _Turn:
     def log(self, **kw) -> None:
         if self.ephemeral and kw.get("outcome") not in ("abstained", "error", "degraded"):
             kw["question"] = "[guest conversation - not stored]"
+        kw.setdefault("conversation_id", self.cid)
+        kw.setdefault("owner_id", self.owner)
         self.svc._log(**kw)
 
 
@@ -296,7 +298,7 @@ class AdvisorService:
             prev_user = [t for r, t in history if r == "user"]
             if prev_user and detect_language(prev_user[-1]) in ("ur", "roman-ur") and not re.search(r"[A-Za-z]{4,}\s+[A-Za-z]{4,}\s+[A-Za-z]{4,}", question):
                 lang = detect_language(prev_user[-1])
-        turn = _Turn(self, cid, ephemeral and owner is None)
+        turn = _Turn(self, cid, owner, ephemeral and owner is None)
         turn.store("user", question)
         yield {"event": "meta", "conversation_id": cid}
 

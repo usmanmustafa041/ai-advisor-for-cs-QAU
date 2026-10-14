@@ -360,7 +360,7 @@ function AdminPortal({ auth, online, onLogout }) {
     </aside>
     <main className="main-content">
       <header className="topbar"><div><p className="eyebrow">ADMINISTRATION / {active.toUpperCase()}</p><h1>{active}</h1><span className="topbar-subtitle">Department of Computer Sciences</span></div><div className="top-actions"><a className="official-site-link" href="https://cs.qau.edu.pk/" target="_blank" rel="noreferrer">Official CS website ↗</a><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Services online' : 'Offline'}</span><div className="mini-avatar">AD</div></div></header>
-      <div className="page-content-wrapper">{active === 'Dashboard' ? <AdminDashboard auth={auth} setActive={setActive} /> : active === 'Chatbot Engine' ? <AdvisorAdmin auth={auth} /> : active === 'Timetable Management' && import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? <TimetableManagement auth={auth} /> : active === 'Ingestion Review' ? <KnowledgeReview request={(path, options) => api(path, options, auth)} /> : active === 'CMS' ? <CMSManager auth={auth} /> : active === 'Reports' ? <Reports auth={auth} /> : active === 'Query Logs' ? <QueryLogs auth={auth} /> : active === 'Model' ? <ModelManager auth={auth} /> : active === 'Settings' ? <SettingsManager auth={auth} /> : <AdminRecords auth={auth} module={active} />}</div>
+      <div className="page-content-wrapper">{active === 'Dashboard' ? <AdminDashboard auth={auth} setActive={setActive} /> : active === 'Chatbot Engine' ? <AdvisorAdmin auth={auth} /> : active === 'Timetable Management' && import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? <TimetableManagement auth={auth} /> : active === 'Ingestion Review' ? <KnowledgeReview request={(path, options) => api(path, options, auth)} /> : active === 'CMS' ? <CMSManager auth={auth} /> : active === 'Reports' ? (CHAT_ENGINE === 'advisor' ? <AdvisorReports auth={auth} /> : <Reports auth={auth} />) : active === 'Query Logs' ? (CHAT_ENGINE === 'advisor' ? <AdvisorQueryLogs auth={auth} /> : <QueryLogs auth={auth} />) : active === 'Model' ? <ModelManager auth={auth} /> : active === 'Settings' ? <SettingsManager auth={auth} /> : <AdminRecords auth={auth} module={active} />}</div>
     </main>
   </div>
 }
@@ -372,7 +372,7 @@ const adminConfig = {
   Timetables: { path: 'timetables', columns: ['course_code', 'term', 'academic_year', 'day_of_week', 'starts_at', 'ends_at', 'room'] },
   Policies: { path: 'policies', columns: ['rule_code', 'category', 'title', 'effective_from', 'active'] },
   Knowledge: { path: 'knowledge', columns: ['title', 'category', 'source_code', 'verification_status', 'chunks', 'processing_status'], noEdit: true },
-  Users: { path: 'users', columns: ['full_name', 'email', 'role', 'active', 'last_login_at', 'created_at'], readonly: true },
+  Users: { path: 'users', columns: ['full_name', 'email', 'role', 'active', 'last_login_at', 'created_at'], noEdit: true },
 }
 
 const FIELD_META = {
@@ -408,6 +408,7 @@ const FIELD_META = {
   content: { label: 'Knowledge Content', placeholder: 'Paste full text here. Use double newlines to create separate chunks.', multiline: true, help: 'Each paragraph (separated by blank lines) becomes a searchable RAG chunk.' },
   full_name: { label: 'Full Name', placeholder: 'Muhammad Ali' },
   email: { label: 'Email', placeholder: 'student@qau.edu.pk', type: 'email' },
+  password: { label: 'Temporary password', placeholder: 'At least 8 characters', type: 'password', help: 'Give the password to the user securely and ask them to change it after signing in.' },
   role: { label: 'Role', help: 'student or admin' },
   active: { label: 'Active?', help: 'Inactive records are hidden from students' },
   priority: { label: 'Priority (lower = higher)', placeholder: '100', type: 'number', help: '0 = highest priority, 1000 = lowest' },
@@ -440,7 +441,16 @@ function FieldInput({ field, value, onChange, sources = [], offerings = [] }) {
 
 function AdminDashboard({ auth, setActive }) {
   const [report, setReport] = useState(null)
-  useEffect(() => { api('/admin/report', {}, auth).then(setReport).catch(() => {}) }, [])
+  const [error, setError] = useState('')
+  useEffect(() => {
+    if (CHAT_ENGINE !== 'advisor') {
+      api('/admin/report', {}, auth).then(setReport).catch((e) => setError(e.message))
+      return
+    }
+    Promise.all([api('/admin/report', {}, auth), advisorRequest('/admin/analytics/report', {}, auth)])
+      .then(([activity, analytics]) => setReport({ ...activity, ...analytics }))
+      .catch((e) => setError(e.message))
+  }, [])
   const modules = [
     { key: 'Courses', icon: '📚', desc: 'Manage course catalogue' },
     { key: 'Prerequisites', icon: '🔗', desc: 'Course prerequisite chains' },
@@ -455,7 +465,7 @@ function AdminDashboard({ auth, setActive }) {
     { key: 'Model', icon: '🤖', desc: 'AI model controls' },
     { key: 'Settings', icon: '⚙️', desc: 'System configuration' },
   ]
-  return <div className="page-grid"><section className="welcome-card"><div><p className="eyebrow">ADMIN CONTROL CENTRE</p><h2>Academic data operations</h2><p>Manage all academic data. Content added here flows directly into the RAG knowledge base and chatbot responses.</p></div></section><div className="stat-grid"><Stat label="Student queries" value={report?.total_messages ?? '—'} note="Recorded messages" /><Stat label="Conversations" value={report?.total_sessions ?? '—'} note="Unique sessions" /><Stat label="Active students" value={report?.active_users_30d ?? '—'} note="Last 30 days" /></div><section className="section-card" style={{maxWidth: '980px'}}><div className="section-heading"><div><p className="eyebrow">MANAGEMENT MODULES</p><h3>All modules</h3></div></div><div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px'}}>{modules.map(({key, icon, desc}) => <button key={key} onClick={() => setActive(key)} style={{textAlign: 'left', padding: '20px', border: '1px solid #dce9e5', borderRadius: '14px', background: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '8px'}} onMouseOver={(e) => e.currentTarget.style.boxShadow='0 8px 20px rgba(26,95,87,0.12)'} onMouseOut={(e) => e.currentTarget.style.boxShadow='none'}><span style={{fontSize: '26px'}}>{icon}</span><strong style={{color: '#1a5f57', fontSize: '15px'}}>{key}</strong><span style={{color: '#78908c', fontSize: '12px', lineHeight: '1.4'}}>{desc}</span></button>)}</div></section></div>
+  return <div className="page-grid"><section className="welcome-card"><div><p className="eyebrow">ADMIN CONTROL CENTRE</p><h2>Academic data operations</h2><p>Manage all academic data. Content added here flows directly into the RAG knowledge base and chatbot responses.</p></div></section>{error && <div className="form-error">{error}</div>}<div className="stat-grid"><Stat label="Student queries" value={report?.total_messages ?? '—'} note="Recorded messages" /><Stat label="Conversations" value={report?.total_sessions ?? '—'} note="Unique sessions" /><Stat label="Active students" value={report?.active_users_30d ?? '—'} note="Last 30 days" /></div><section className="section-card" style={{maxWidth: '980px'}}><div className="section-heading"><div><p className="eyebrow">MANAGEMENT MODULES</p><h3>All modules</h3></div></div><div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px'}}>{modules.map(({key, icon, desc}) => <button key={key} onClick={() => setActive(key)} style={{textAlign: 'left', padding: '20px', border: '1px solid #dce9e5', borderRadius: '14px', background: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '8px'}} onMouseOver={(e) => e.currentTarget.style.boxShadow='0 8px 20px rgba(26,95,87,0.12)'} onMouseOut={(e) => e.currentTarget.style.boxShadow='none'}><span style={{fontSize: '26px'}}>{icon}</span><strong style={{color: '#1a5f57', fontSize: '15px'}}>{key}</strong><span style={{color: '#78908c', fontSize: '12px', lineHeight: '1.4'}}>{desc}</span></button>)}</div></section></div>
 }
 
 function AdminRecords({ auth, module }) {
@@ -463,19 +473,30 @@ function AdminRecords({ auth, module }) {
   const [rows, setRows] = useState([]); const [error, setError] = useState(''); const [showForm, setShowForm] = useState(false); const [editing, setEditing] = useState(null); const [loading, setLoading] = useState(false); const [syncing, setSyncing] = useState(false); const [syncResult, setSyncResult] = useState(null)
   async function load() { setError(''); setLoading(true); try { setRows(await api(`/admin/${config.path}`, {}, auth)) } catch (e) { setError(e.message) } finally { setLoading(false) } }
   useEffect(() => { load() }, [module])
-  async function toggleUser(row) { try { await api(`/admin/users/${row.id}`, { method: 'PATCH', body: JSON.stringify({ active: !row.active }) }, auth); load() } catch (e) { setError(e.message) } }
+  async function toggleUser(row) { setError(''); try { await api(`/admin/users/${row.id}`, { method: 'PATCH', body: JSON.stringify({ active: !row.active }) }, auth); await load() } catch (e) { setError(e.message) } }
   async function remove(row) { const id = row.id || row.code; if (!confirm(`Disable/delete "${row.title || row.code || id}"?`)) return; try { await api(`/admin/${config.path}/${encodeURIComponent(id)}`, { method: 'DELETE' }, auth); load() } catch (e) { setError(e.message) } }
+  async function deleteUser(row) {
+    if (!confirm(`Permanently delete ${row.full_name} (${row.email}) and all saved advisor conversations? This cannot be undone.`)) return
+    setError('')
+    try {
+      if (CHAT_ENGINE === 'advisor') {
+        await advisorRequest(`/admin/users/${encodeURIComponent(row.id)}/data`, { method: 'DELETE' }, auth)
+      }
+      await api(`/admin/users/${encodeURIComponent(row.id)}`, { method: 'DELETE' }, auth)
+      await load()
+    } catch (e) { setError(e.message) }
+  }
   async function ragSync() { setSyncing(true); setSyncResult(null); try { const result = await api('/admin/knowledge/reindex', { method: 'POST' }, auth); setSyncResult({ ok: true, msg: `✓ Re-indexed ${result.chunks_created} chunks from ${result.documents_processed} documents.` }) } catch (e) { setSyncResult({ ok: false, msg: e.message }) } finally { setSyncing(false) } }
-  return <section className="section-card full"><div className="section-heading" style={{marginBottom: '20px'}}><div><p className="eyebrow">ADMINISTRATOR ONLY</p><h3>Manage {module}</h3></div><div style={{display:'flex', gap:'10px', alignItems:'center'}}>{module === 'Knowledge' && <><button className="secondary" onClick={ragSync} disabled={syncing}>{syncing ? 'Syncing…' : '🔄 Sync to RAG'}</button>{syncResult && <span style={{fontSize:'11px', color: syncResult.ok ? '#2d8b63' : '#a13b3b'}}>{syncResult.msg}</span>}</>}{!config.readonly && module !== 'Users' && <button className="primary" onClick={() => setShowForm(!showForm)}>{showForm ? '✕ Cancel' : '+ Add record'}</button>}</div></div>{showForm && <AdminCreateForm module={module} auth={auth} onSaved={() => { setShowForm(false); load() }} />}{editing && <AdminEditForm module={module} row={editing} auth={auth} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}{error && <div className="form-error">{error}</div>}{loading ? <div className="empty-state"><span>⏳</span><h3>Loading…</h3></div> : <DataTable columns={config.columns} rows={rows} actions={!config.readonly ? (row) => <div className="row-actions">{!config.noEdit && <button className="small-button" onClick={() => setEditing(row)}>✏️ Edit</button>}{module === 'Users' ? <button className="small-button" onClick={() => toggleUser(row)}>{row.active ? 'Disable' : 'Enable'}</button> : <button className="danger small" onClick={() => remove(row)}>{module === 'Courses' || module === 'Policies' ? 'Disable' : 'Delete'}</button>}</div> : null} empty={`No ${module.toLowerCase()} are currently available.`} />}</section>
+  return <section className="section-card full"><div className="section-heading" style={{marginBottom: '20px'}}><div><p className="eyebrow">ADMINISTRATOR ONLY</p><h3>Manage {module}</h3></div><div style={{display:'flex', gap:'10px', alignItems:'center'}}>{module === 'Knowledge' && <><button className="secondary" onClick={ragSync} disabled={syncing}>{syncing ? 'Syncing…' : '🔄 Sync to RAG'}</button>{syncResult && <span style={{fontSize:'11px', color: syncResult.ok ? '#2d8b63' : '#a13b3b'}}>{syncResult.msg}</span>}</>}{!config.readonly && <button className="primary" onClick={() => setShowForm(!showForm)}>{showForm ? '✕ Cancel' : module === 'Users' ? '+ Add user' : '+ Add record'}</button>}</div></div>{showForm && <AdminCreateForm module={module} auth={auth} onSaved={() => { setShowForm(false); load() }} />}{editing && <AdminEditForm module={module} row={editing} auth={auth} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}{error && <div className="form-error">{error}</div>}{loading ? <div className="empty-state"><span>⏳</span><h3>Loading…</h3></div> : <DataTable columns={config.columns} rows={rows} actions={!config.readonly ? (row) => <div className="row-actions">{!config.noEdit && <button className="small-button" onClick={() => setEditing(row)}>✏️ Edit</button>}{module === 'Users' ? <>{row.id !== auth.user.id && <button className="small-button" onClick={() => toggleUser(row)}>{row.active ? 'Deactivate' : 'Reactivate'}</button>}{row.id !== auth.user.id && <button className="danger small" onClick={() => deleteUser(row)}>Delete</button>}</> : <button className="danger small" onClick={() => remove(row)}>{module === 'Courses' || module === 'Policies' ? 'Disable' : 'Delete'}</button>}</div> : null} empty={`No ${module.toLowerCase()} are currently available.`} />}</section>
 }
 
 function AdminCreateForm({ module, auth, onSaved }) {
   const [values, setValues] = useState({}); const [error, setError] = useState(''); const [saving, setSaving] = useState(false); const [sources, setSources] = useState([]); const [offerings, setOfferings] = useState([])
-  const fields = useMemo(() => ({ Courses: ['code', 'title', 'description', 'theory_credit_hours', 'lab_credit_hours', 'source_id'], Prerequisites: ['course_code', 'prerequisite_course_code', 'curriculum', 'relation_type', 'minimum_grade', 'waiver_condition', 'source_id', 'verified'], Fees: ['program_code', 'official_fee_category', 'shift', 'fee_type', 'amount', 'effective_from', 'source_id'], Timetables: ['offering_id', 'session_type', 'day_of_week', 'starts_at', 'ends_at', 'room', 'lab_group'], Policies: ['rule_code', 'category', 'title', 'description', 'effective_from', 'source_id'], Knowledge: ['source_id', 'title', 'category', 'content'] }[module] || []), [module])
+  const fields = useMemo(() => ({ Courses: ['code', 'title', 'description', 'theory_credit_hours', 'lab_credit_hours', 'source_id'], Prerequisites: ['course_code', 'prerequisite_course_code', 'curriculum', 'relation_type', 'minimum_grade', 'waiver_condition', 'source_id', 'verified'], Fees: ['program_code', 'official_fee_category', 'shift', 'fee_type', 'amount', 'effective_from', 'source_id'], Timetables: ['offering_id', 'session_type', 'day_of_week', 'starts_at', 'ends_at', 'room', 'lab_group'], Policies: ['rule_code', 'category', 'title', 'description', 'effective_from', 'source_id'], Knowledge: ['source_id', 'title', 'category', 'content'], Users: ['full_name', 'email', 'password', 'role'] }[module] || []), [module])
   useEffect(() => { if (fields.includes('source_id')) api('/admin/sources', {}, auth).then(setSources).catch(() => {}); if (fields.includes('offering_id')) api('/admin/offerings', {}, auth).then(setOfferings).catch(() => {}) }, [module])
   function set(field, val) { setValues((prev) => ({ ...prev, [field]: val })) }
   async function submit(event) { event.preventDefault(); setError(''); setSaving(true); try { const numeric = new Set(['theory_credit_hours', 'lab_credit_hours', 'amount', 'day_of_week']); const payload = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, numeric.has(k) ? Number(v) : v])); await api(`/admin/${adminConfig[module].path}`, { method: 'POST', body: JSON.stringify(payload) }, auth); onSaved() } catch (e) { setError(e.message) } finally { setSaving(false) } }
-  return <div style={{background: '#f5f9f8', borderRadius: '16px', padding: '28px', marginBottom: '24px', border: '1px solid #dce9e5'}}><p style={{margin: '0 0 20px', fontWeight: '700', color: '#1a5f57', fontSize: '15px'}}>➕ New {module.slice(0,-1 > 0 ? -1 : undefined)} record</p><form style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px'}} onSubmit={submit}>{fields.map((f) => <FieldInput key={f} field={f} value={values[f]} onChange={(v) => set(f, v)} sources={sources} offerings={offerings} />)}{error && <div className="form-error" style={{gridColumn: '1 / -1'}}>{error}</div>}<div style={{gridColumn: '1 / -1', display: 'flex', gap: '10px', marginTop: '8px'}}><button className="primary" disabled={saving}>{saving ? 'Saving…' : '💾 Save record'}</button></div></form></div>
+  return <div style={{background: '#f5f9f8', borderRadius: '16px', padding: '28px', marginBottom: '24px', border: '1px solid #dce9e5'}}><p style={{margin: '0 0 20px', fontWeight: '700', color: '#1a5f57', fontSize: '15px'}}>{module === 'Users' ? '➕ Create a user account' : `➕ New ${module.slice(0,-1 > 0 ? -1 : undefined)} record`}</p><form style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '18px'}} onSubmit={submit}>{fields.map((f) => <FieldInput key={f} field={f} value={values[f]} onChange={(v) => set(f, v)} sources={sources} offerings={offerings} />)}{error && <div className="form-error" style={{gridColumn: '1 / -1'}}>{error}</div>}<div style={{gridColumn: '1 / -1', display: 'flex', gap: '10px', marginTop: '8px'}}><button className="primary" disabled={saving}>{saving ? 'Saving…' : module === 'Users' ? 'Create user' : '💾 Save record'}</button></div></form></div>
 }
 
 function AdminEditForm({ module, row, auth, onCancel, onSaved }) {
@@ -493,6 +514,123 @@ function QueryLogs({ auth }) {
   useEffect(() => { load() }, [])
   async function download() { const query = params(); query.delete('limit'); query.delete('offset'); const response = await fetch(`${API}/admin/query-logs-export?${query}`, { headers: { Authorization: `Bearer ${auth.access_token}` } }); if (!response.ok) { setError('Could not export logs'); return } const url = URL.createObjectURL(await response.blob()); const link = document.createElement('a'); link.href = url; link.download = 'qau-query-logs.csv'; link.click(); URL.revokeObjectURL(url) }
   return <section className="section-card full"><div className="section-heading"><div><p className="eyebrow">UC16 · AUDITABLE QUERIES</p><h3>Search and export query logs</h3></div><button className="secondary" onClick={download}>Export CSV</button></div><form className="filter-form" onSubmit={(e) => load(e, 0)}><label>Text or intent<input value={search} onChange={(e) => setSearch(e.target.value)} /></label><label>Student email<input value={email} onChange={(e) => setEmail(e.target.value)} /></label><label>Start<input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label><label>End<input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></label><button className="primary">Filter</button></form>{error && <div className="form-error">{error}</div>}<DataTable columns={['email', 'content', 'intent', 'intent_confidence', 'response_time_ms', 'created_at']} rows={rows} /><div className="row-actions"><button className="secondary" disabled={!offset} onClick={() => load(null, Math.max(0, offset - limit))}>Previous</button><button className="secondary" disabled={rows.length < limit} onClick={() => load(null, offset + limit)}>Next</button></div></section>
+}
+
+function AdvisorQueryLogs({ auth }) {
+  const [rows, setRows] = useState([])
+  const [search, setSearch] = useState('')
+  const [email, setEmail] = useState('')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [error, setError] = useState('')
+  const limit = 50
+
+  async function load(event, nextOffset = offset) {
+    event?.preventDefault()
+    setError('')
+    try {
+      const users = await api('/admin/users', {}, auth)
+      const matches = email.trim()
+        ? users.filter((user) => user.email.toLowerCase().includes(email.trim().toLowerCase()))
+        : []
+      const params = new URLSearchParams({ limit, offset: nextOffset })
+      if (search) params.set('search', search)
+      if (start) params.set('start', start)
+      if (end) params.set('end', end)
+      if (email.trim()) {
+        if (!matches.length) { setRows([]); setOffset(nextOffset); return }
+        params.set('user_ids', matches.map((user) => user.id).join(','))
+      }
+      const data = await advisorRequest(`/admin/analytics/query-logs?${params}`, {}, auth)
+      const emailById = new Map(users.map((user) => [user.id, user.email]))
+      setRows(data.map((row) => ({
+        ...row,
+        email: emailById.get(row.user_id) || (row.user_id ? 'Deleted user' : 'Guest'),
+      })))
+      setOffset(nextOffset)
+    } catch (e) { setError(e.message) }
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function download() {
+    setError('')
+    try {
+      const users = await api('/admin/users', {}, auth)
+      const matches = email.trim()
+        ? users.filter((user) => user.email.toLowerCase().includes(email.trim().toLowerCase()))
+        : []
+      const params = new URLSearchParams({ limit: 500, offset: 0 })
+      if (search) params.set('search', search)
+      if (start) params.set('start', start)
+      if (end) params.set('end', end)
+      if (email.trim()) {
+        if (!matches.length) { setRows([]); return }
+        params.set('user_ids', matches.map((user) => user.id).join(','))
+      }
+      const data = await advisorRequest(`/admin/analytics/query-logs?${params}`, {}, auth)
+      const emailById = new Map(users.map((user) => [user.id, user.email]))
+      const columns = ['email', 'content', 'outcome', 'latency_ms', 'created_at']
+      const csv = [columns.join(','), ...data.map((row) => columns.map((key) => {
+        const value = key === 'email' ? emailById.get(row.user_id) || (row.user_id ? 'Deleted user' : 'Guest') : row[key]
+        return `"${String(value ?? '').replaceAll('"', '""')}"`
+      }).join(','))].join('\r\n')
+      const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'qau-query-logs.csv'
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (e) { setError(e.message) }
+  }
+
+  return <section className="section-card full">
+    <div className="section-heading"><div><p className="eyebrow">UC16 · AUDITABLE QUERIES</p><h3>Search and export query logs</h3></div><button className="secondary" onClick={download}>Export CSV</button></div>
+    <form className="filter-form" onSubmit={(event) => load(event, 0)}>
+      <label>Text or outcome<input value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+      <label>Student email<input value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+      <label>Start<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label>
+      <label>End<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label>
+      <button className="primary">Filter</button>
+    </form>
+    {error && <div className="form-error">{error}</div>}
+    <DataTable columns={['email', 'content', 'outcome', 'latency_ms', 'created_at']} rows={rows} />
+    <div className="row-actions"><button className="secondary" disabled={!offset} onClick={() => load(null, Math.max(0, offset - limit))}>Previous</button><button className="secondary" disabled={rows.length < limit} onClick={() => load(null, offset + limit)}>Next</button></div>
+  </section>
+}
+
+function AdvisorReports({ auth }) {
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [report, setReport] = useState(null)
+  const [error, setError] = useState('')
+
+  async function generate(event) {
+    event?.preventDefault()
+    setError('')
+    const params = new URLSearchParams({ ...(start && { start }), ...(end && { end }) })
+    try {
+      const [activity, analytics] = await Promise.all([
+        api(`/admin/report?${params}`, {}, auth),
+        advisorRequest(`/admin/analytics/report?${params}`, {}, auth),
+      ])
+      setReport({
+        ...analytics,
+        total_users: activity.total_users,
+        active_users_30d: activity.active_users_30d,
+      })
+    } catch (e) { setError(e.message) }
+  }
+
+  useEffect(() => { generate() }, [])
+
+  return <section className="section-card full">
+    <div className="section-heading"><div><p className="eyebrow">UC17 · USAGE ANALYTICS</p><h3>Generate report</h3></div><button className="secondary" onClick={() => window.print()}>Print report</button></div>
+    <form className="filter-form" onSubmit={generate}><label>Start date<input type="date" value={start} onChange={(event) => setStart(event.target.value)} /></label><label>End date<input type="date" value={end} onChange={(event) => setEnd(event.target.value)} /></label><button className="primary">Generate</button></form>
+    {error && <div className="form-error">{error}</div>}
+    {report && <><div className="stat-grid"><Stat label="Messages" value={report.total_messages} note="Student questions" /><Stat label="Sessions" value={report.total_sessions} note={`Average ${report.average_session_minutes ?? 0} min`} /><Stat label="Active students" value={report.active_users_30d} note={`${report.total_users} registered`} /><Stat label="Outcomes" value={report.intents_seen} note="Categories" /></div>{report.warning && <div className="notice">{report.warning}</div>}<DataTable columns={['intent', 'count']} rows={report.by_intent} /></>}
+  </section>
 }
 
 function ModelManager({ auth }) {

@@ -120,6 +120,7 @@ class Database:
         wanted = {
             "conversations": [("owner_id", "TEXT"), ("title", "TEXT")],
             "feedback": [("reason", "TEXT")],
+            "query_log": [("conversation_id", "TEXT"), ("owner_id", "TEXT")],
         }
         for table, cols in wanted.items():
             have = columns(table)
@@ -127,6 +128,8 @@ class Database:
                 if name not in have:
                     self._conn().execute(f"ALTER TABLE {table} ADD COLUMN {name} {typ}")
         self._conn().execute("CREATE INDEX IF NOT EXISTS conv_owner ON conversations(owner_id, updated_at)")
+        self._conn().execute("CREATE INDEX IF NOT EXISTS query_log_conversation ON query_log(conversation_id)")
+        self._conn().execute("CREATE INDEX IF NOT EXISTS query_log_owner ON query_log(owner_id)")
 
     def _conn(self) -> sqlite3.Connection:
         conn = getattr(self._local, "conn", None)
