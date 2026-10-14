@@ -11,7 +11,8 @@ from app.core.auth import create_session, create_token, current_user, hash_passw
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.schemas.auth import (
-    AuthResponse, ForgotPasswordRequest, LoginRequest, RegisterRequest, ResetPasswordRequest,
+    AuthResponse, ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, RegisterRequest,
+    ResetPasswordRequest,
 )
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
@@ -93,6 +94,32 @@ def reset_password(payload: ResetPasswordRequest, db: Session = Depends(get_db))
                {"id": row["user_id"]})
     db.commit()
     return {"password_reset": True, "message": "Password reset successfully. Sign in with your new password."}
+
+
+@router.post("/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    user: dict = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    row = db.execute(
+        text("SELECT password_hash FROM app_users WHERE id=:id AND active"),
+        {"id": user["id"]},
+    ).mappings().one_or_none()
+    if not row or not verify_password(payload.current_password, row["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(payload.new_password, row["password_hash"]):
+        raise HTTPException(status_code=400, detail="New password must be different from the current password")
+    db.execute(
+        text("UPDATE app_users SET password_hash=:password, updated_at=NOW() WHERE id=:id"),
+        {"password": hash_password(payload.new_password), "id": user["id"]},
+    )
+    db.execute(
+        text("UPDATE auth_sessions SET revoked_at=NOW() WHERE user_id=:id AND revoked_at IS NULL"),
+        {"id": user["id"]},
+    )
+    db.commit()
+    return {"password_changed": True, "message": "Password changed successfully. Sign in again."}
 
 
 @router.get("/me")

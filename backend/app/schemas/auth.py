@@ -35,6 +35,18 @@ class ResetPasswordRequest(BaseModel):
         return self
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
+    confirm_password: str = Field(min_length=10, max_length=128)
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("New password and confirm password do not match")
+        return self
+
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

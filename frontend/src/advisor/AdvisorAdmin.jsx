@@ -22,7 +22,7 @@ function useAdmin(portalAuth) {
     }
   }, [token])
   const signIn = (t) => { sessionStorage.setItem(TOKEN_KEY, t); setEngineToken(t); setNeedsLogin(false) }
-  return { token, call, signIn, signOut, needsLogin }
+  return { token, call, signIn, signOut, needsLogin, usesPortalSession: !engineToken && !!portalAuth?.access_token }
 }
 
 function Login({ onSignedIn }) {
@@ -322,26 +322,37 @@ function Feedback({ call }) {
   )
 }
 
-function Account({ call, signOut }) {
-  const [cur, setCur] = useState(''); const [nw, setNw] = useState(''); const [msg, setMsg] = useState('')
+function Account({ call, signOut, usesPortalSession, onPortalPasswordChange, onPortalLogout }) {
+  const [cur, setCur] = useState(''); const [nw, setNw] = useState(''); const [confirm, setConfirm] = useState(''); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false)
   const change = async (e) => {
     e.preventDefault(); setMsg('')
-    try { await call('POST', '/admin/password', { current_password: cur, new_password: nw }); signOut() } catch (err) { setMsg(err.message) }
+    if (nw !== confirm) { setMsg('New password and confirm password do not match'); return }
+    setBusy(true)
+    try {
+      if (usesPortalSession) {
+        await onPortalPasswordChange({ current_password: cur, new_password: nw, confirm_password: confirm })
+        await onPortalLogout()
+      } else {
+        await call('POST', '/admin/password', { current_password: cur, new_password: nw })
+        signOut()
+      }
+    } catch (err) { setMsg(err.message) } finally { setBusy(false) }
   }
   return (
     <form className="card login" onSubmit={change}>
       <h3>Change password</h3>
       <label>Current password<input type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" required /></label>
       <label>New password (10+ characters)<input type="password" value={nw} minLength={10} onChange={(e) => setNw(e.target.value)} autoComplete="new-password" required /></label>
+      <label>Confirm new password<input type="password" value={confirm} minLength={10} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" required /></label>
       {msg && <p className="err">{msg}</p>}
-      <button className="adv-primary">Change password</button>
+      <button className="adv-primary" disabled={busy}>{busy ? 'Changing password…' : 'Change password'}</button>
       <p className="muted">You'll be signed out on all devices.</p>
     </form>
   )
 }
 
-export function AdvisorAdmin({ auth }) {
-  const { call, signIn, signOut, needsLogin, token } = useAdmin(auth)
+export function AdvisorAdmin({ auth, onPortalPasswordChange, onPortalLogout }) {
+  const { call, signIn, signOut, needsLogin, token, usesPortalSession } = useAdmin(auth)
   const [tab, setTab] = useState('overview')
   const [checked, setChecked] = useState(false)
   useEffect(() => { call('GET', '/admin/me').catch(() => {}).finally(() => setChecked(true)) }, [call])
@@ -358,7 +369,7 @@ export function AdvisorAdmin({ auth }) {
         {tab === 'questions' && <Questions call={call} />}
         {tab === 'feedback' && <Feedback call={call} />}
         {tab === 'content' && <div><SettingsForm call={call} group="content" title="Notice & assistant guidance" /><SettingsForm call={call} group="retrieval" title="Retrieval" /><SettingsForm call={call} group="operations" title="Operations" /></div>}
-        {tab === 'account' && <Account call={call} signOut={signOut} />}
+        {tab === 'account' && <Account call={call} signOut={signOut} usesPortalSession={usesPortalSession} onPortalPasswordChange={onPortalPasswordChange} onPortalLogout={onPortalLogout} />}
       </section>
     </div>
   )
