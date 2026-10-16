@@ -123,4 +123,19 @@ describe('academic advisor interface', () => {
     const payloads = fetch.mock.calls.filter(([url]) => url.endsWith('/chat')).map(([, options]) => JSON.parse(options.body))
     expect(payloads.map(p => p.context_course_code)).toEqual([null, 'CSC-483', 'CSC-483', null])
   })
+
+  it('loads all policies without sending a blank search filter', async () => {
+    vi.stubGlobal('fetch', vi.fn(url => Promise.resolve({ ok: true, json: async () => String(url).endsWith('/policies') ? [{
+      rule_code: 'BS-MIN-ATTENDANCE', category: 'examination', title: 'Minimum attendance',
+      description: 'Students must meet the attendance requirement.', effective_from: '2026-08-11',
+      source: { title: 'BS rules', source_url: 'https://qau.edu.pk/rules', verification_status: 'verified' },
+    }] : { status: 'ok' } })))
+    render(<App />)
+    fireEvent.click(screen.getByRole('button', { name: /Continue without signing in/i }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Policies' })[0])
+
+    expect(await screen.findByText('Minimum attendance')).toBeInTheDocument()
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith('/api/v1/policies'))).toBe(true)
+    expect(fetch.mock.calls.some(([url]) => String(url).includes('/policies?search='))).toBe(false)
+  })
 })

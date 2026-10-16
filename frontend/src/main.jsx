@@ -152,7 +152,7 @@ function Shell({ auth, online, active, setActive, onLogout, children }) {
   const studentNav = guest ? ['Chat', 'Study Plan', 'Courses', 'Fees', 'Timetable', 'Policies'] : ['Chat', 'Study Plan', 'Courses', 'Fees', 'Timetable', 'Policies', 'History']
   const adminNav = ['Dashboard', ...(CHAT_ENGINE === 'advisor' ? ['Chatbot Engine'] : []), 'CMS', 'Courses', 'Prerequisites', 'Fees', 'Timetables', 'Policies', 'Knowledge', 'Ingestion Review', ...(import.meta.env.VITE_CHATBOT_REBUILD === 'true' ? ['Timetable Management'] : []), 'Query Logs', 'Users', 'Model', 'Settings', 'Reports']
   const items = admin ? adminNav : studentNav
-  const navIcons = { 'Chatbot Engine': '✨', Dashboard: '📊', CMS: '🧠', Courses: '📚', Prerequisites: '🔗', Fees: '💰', Timetables: '🗓️', Policies: '📋', Knowledge: '📖', 'Ingestion Review': '🔍', 'Timetable Management': '🗓️', 'Query Logs': '🔍', Users: '👥', Model: '🤖', Settings: '⚙️', Reports: '📈', Chat: '💬', 'Study Plan': '📑', Timetable: '🗓️', History: '🕒' }
+  const navIcons = admin ? {} : { Chat: '💬', 'Study Plan': '📑', Courses: '📚', Fees: '💰', Timetable: '🗓️', Policies: '📋', History: '🕒' }
 
   const handleNavClick = (item) => {
     setActive(item)
@@ -532,10 +532,10 @@ function Timetable({ auth }) {
 }
 
 function Policies({ auth }) {
-  const [search, setSearch] = useState(''); const [rows, setRows] = useState([]); const [loaded, setLoaded] = useState(false); const [loading, setLoading] = useState(false);
-  async function load(event) { event?.preventDefault(); setLoading(true); try { setRows(await api(`/policies?search=${encodeURIComponent(search)}`, {}, auth)); setLoaded(true) } catch(e) {} finally { setLoading(false) } }
+  const [search, setSearch] = useState(''); const [rows, setRows] = useState([]); const [loaded, setLoaded] = useState(false); const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  async function load(event) { event?.preventDefault(); setLoading(true); setError(''); const term = search.trim(); try { setRows(await api(term ? `/policies?search=${encodeURIComponent(term)}` : '/policies', {}, auth)); setLoaded(true) } catch(e) { setError(e.message); setLoaded(true) } finally { setLoading(false) } }
   useEffect(() => { load() }, [])
-  return <section className="section-card full"><div className="section-heading"><div><p className="eyebrow">POLICIES & GUIDELINES</p><h3>Academic policy records</h3></div></div><form className="search-form" onSubmit={load}><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search attendance, FYP, thesis…" /><button className="primary" disabled={loading}>{loading ? 'Searching...' : 'Search'}</button></form><div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px'}}>{rows.map((r) => <article className="policy-card" key={r.rule_code}><span>{r.category}</span><h3>{r.title}</h3><p style={{marginBottom: '16px'}}>{r.description}</p><small style={{color: '#728c89'}}>Effective {r.effective_from} · {r.source?.title} · {r.source?.source_url ? r.source.verification_status : 'Source not authenticated'}</small></article>)}</div>{loaded && !rows.length && <Empty text="No matching verified policy was found. Contact the department for unpublished guidance." />}</section>
+  return <section className="section-card full"><div className="section-heading"><div><p className="eyebrow">POLICIES & GUIDELINES</p><h3>Academic policy records</h3></div></div><form className="search-form" onSubmit={load}><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search attendance, FYP, thesis…" /><button className="primary" disabled={loading}>{loading ? 'Searching...' : 'Search'}</button></form>{error && <div className="form-error" role="alert">{error}</div>}<div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px'}}>{rows.map((r) => <article className="policy-card" key={r.rule_code}><span>{r.category}</span><h3>{r.title}</h3><p style={{marginBottom: '16px'}}>{r.description}</p><small style={{color: '#728c89'}}>Effective {r.effective_from} · {r.source?.title} · {r.source?.source_url ? r.source.verification_status : 'Source not authenticated'}</small></article>)}</div>{loaded && !error && !rows.length && <Empty text="No matching verified policy was found. Contact the department for unpublished guidance." />}</section>
 }
 
 function History({ auth }) {
@@ -640,20 +640,20 @@ function AdminDashboard({ auth, setActive }) {
       .catch((e) => setError(e.message))
   }, [])
   const modules = [
-    { key: 'Courses', icon: '📚', desc: 'Manage course catalogue' },
-    { key: 'Prerequisites', icon: '🔗', desc: 'Course prerequisite chains' },
-    { key: 'Fees', icon: '💰', desc: 'Fee structures & charges' },
-    { key: 'Timetables', icon: '🗓️', desc: 'Class schedules & rooms' },
-    { key: 'Policies', icon: '📋', desc: 'Academic rules & policies' },
-    { key: 'Knowledge', icon: '📖', desc: 'RAG knowledge base entries' },
-    { key: 'CMS', icon: '🧠', desc: 'Chatbot content management' },
-    { key: 'Query Logs', icon: '🔍', desc: 'Student query history' },
-    { key: 'Users', icon: '👥', desc: 'Student & admin accounts' },
-    { key: 'Reports', icon: '📈', desc: 'Usage analytics' },
-    { key: 'Model', icon: '🤖', desc: 'AI model controls' },
-    { key: 'Settings', icon: '⚙️', desc: 'System configuration' },
+    { key: 'Courses', desc: 'Manage course catalogue' },
+    { key: 'Prerequisites', desc: 'Course prerequisite chains' },
+    { key: 'Fees', desc: 'Fee structures & charges' },
+    { key: 'Timetables', desc: 'Class schedules & rooms' },
+    { key: 'Policies', desc: 'Academic rules & policies' },
+    { key: 'Knowledge', desc: 'RAG knowledge base entries' },
+    { key: 'CMS', desc: 'Chatbot content management' },
+    { key: 'Query Logs', desc: 'Student query history' },
+    { key: 'Users', desc: 'Student & admin accounts' },
+    { key: 'Reports', desc: 'Usage analytics' },
+    { key: 'Model', desc: 'AI model controls' },
+    { key: 'Settings', desc: 'System configuration' },
   ]
-  return <div className="page-grid"><section className="welcome-card"><div><p className="eyebrow">ADMIN CONTROL CENTRE</p><h2>Academic data operations</h2><p>Manage all academic data. Content added here flows directly into the RAG knowledge base and chatbot responses.</p></div></section>{error && <div className="form-error">{error}</div>}<div className="stat-grid"><Stat label="Student queries" value={report?.total_messages ?? '—'} note="Recorded messages" /><Stat label="Conversations" value={report?.total_sessions ?? '—'} note="Unique sessions" /><Stat label="Active students" value={report?.active_users_30d ?? '—'} note="Last 30 days" /></div><section className="section-card" style={{maxWidth: '980px'}}><div className="section-heading"><div><p className="eyebrow">MANAGEMENT MODULES</p><h3>All modules</h3></div></div><div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px'}}>{modules.map(({key, icon, desc}) => <button key={key} onClick={() => setActive(key)} style={{textAlign: 'left', padding: '20px', border: '1px solid #dce9e5', borderRadius: '14px', background: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '8px'}} onMouseOver={(e) => e.currentTarget.style.boxShadow='0 8px 20px rgba(26,95,87,0.12)'} onMouseOut={(e) => e.currentTarget.style.boxShadow='none'}><span style={{fontSize: '26px'}}>{icon}</span><strong style={{color: '#1a5f57', fontSize: '15px'}}>{key}</strong><span style={{color: '#78908c', fontSize: '12px', lineHeight: '1.4'}}>{desc}</span></button>)}</div></section></div>
+  return <div className="page-grid"><section className="welcome-card"><div><p className="eyebrow">ADMIN CONTROL CENTRE</p><h2>Academic data operations</h2><p>Manage all academic data. Content added here flows directly into the RAG knowledge base and chatbot responses.</p></div></section>{error && <div className="form-error">{error}</div>}<div className="stat-grid"><Stat label="Student queries" value={report?.total_messages ?? '—'} note="Recorded messages" /><Stat label="Conversations" value={report?.total_sessions ?? '—'} note="Unique sessions" /><Stat label="Active students" value={report?.active_users_30d ?? '—'} note="Last 30 days" /></div><section className="section-card" style={{maxWidth: '980px'}}><div className="section-heading"><div><p className="eyebrow">MANAGEMENT MODULES</p><h3>All modules</h3></div></div><div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '14px'}}>{modules.map(({key, desc}) => <button key={key} onClick={() => setActive(key)} style={{textAlign: 'left', padding: '20px', border: '1px solid #dce9e5', borderRadius: '14px', background: 'white', cursor: 'pointer', transition: 'all 0.2s', display: 'flex', flexDirection: 'column', gap: '8px'}} onMouseOver={(e) => e.currentTarget.style.boxShadow='0 8px 20px rgba(26,95,87,0.12)'} onMouseOut={(e) => e.currentTarget.style.boxShadow='none'}><strong style={{color: '#1a5f57', fontSize: '15px'}}>{key}</strong><span style={{color: '#78908c', fontSize: '12px', lineHeight: '1.4'}}>{desc}</span></button>)}</div></section></div>
 }
 
 function AdminRecords({ auth, module }) {

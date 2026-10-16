@@ -323,6 +323,8 @@ def list_policies(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """Search currently effective, source-backed academic policies and guidelines."""
+    category_term = (category or "").strip() or None
+    search_term = (search or "").strip() or None
     rows = db.execute(
         text(f"""
         SELECT r.rule_code, r.category, r.title, r.description, r.effective_from,
@@ -334,7 +336,11 @@ def list_policies(
           AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
         ORDER BY r.priority, r.title
     """),
-        {"category": category, "search": search, "pattern": f"%{search}%" if search else None},
+        {
+            "category": category_term,
+            "search": search_term,
+            "pattern": f"%{search_term}%" if search_term else None,
+        },
     ).mappings()
     result = []
     for row in rows:
