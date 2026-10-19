@@ -19,7 +19,7 @@ from app.rag.corpus import (
     text_problem,
 )
 from app.rag.evidence import EvidenceIndex, Hit, fingerprint, normalize_query
-from app.response.grounded import generate_answer, semester_fee_answer, validate_claims
+from app.response.grounded import fyp_rules_missing, generate_answer, semester_fee_answer, validate_claims
 
 
 def chunk(content="BS students need Mathematics for admission.", **kwargs):
@@ -137,6 +137,19 @@ def test_missing_fyp_procedure_is_explained_without_waiting_for_model(monkeypatc
     assert result.grounding_status == "insufficient_evidence"
     assert "submission procedure" in result.answer and "confirm" in result.answer
     assert result.model == "source-gap"
+
+
+def test_uploaded_department_fyp_procedure_satisfies_evidence_guard():
+    hit = Hit(
+        chunk(
+            "Final Year Project (FYP) submission requires a formatted report, supervisor "
+            "approval, plagiarism check, public defense, hardbound copies and source code.",
+            program="BSCS",
+            category="department_document",
+        ),
+        1.0,
+    )
+    assert not fyp_rules_missing("What are the FYP submission rules?", [hit])
 
 
 def test_personal_credit_load_asks_programme_before_generating(monkeypatch):

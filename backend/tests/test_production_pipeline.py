@@ -1,6 +1,7 @@
 """Release-relevant review, provenance, context and arithmetic regressions."""
 
 import io
+import os
 from zipfile import ZipFile
 
 import httpx
@@ -141,7 +142,8 @@ def test_backup_has_consistent_sqlite_and_detects_tampering(tmp_path):
     corpus.write_text("evidence")
     output = tmp_path / "private/backup.tar.gz"
     make_backup(output, archive, corpus)
-    assert output.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert output.stat().st_mode & 0o777 == 0o600
     assert "source-archive/catalogue.sqlite3" in verify_backup(output)["files"]
     with tarfile.open(output, "r:gz") as tar:
         records = [(m, tar.extractfile(m).read()) for m in tar.getmembers()]

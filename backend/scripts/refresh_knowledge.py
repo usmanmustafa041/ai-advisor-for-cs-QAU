@@ -5,7 +5,6 @@ Corpus replacement is last; readers with mismatched dense files use BM25.
 """
 
 import argparse
-import fcntl
 import json
 import os
 import subprocess
@@ -13,10 +12,28 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+try:
+    import fcntl
+except ImportError:  # Windows development and CI
+    fcntl = None
+    import msvcrt
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.ingestion.archive import atomic_write, utc_now
 from app.rag.corpus import PROJECT_ROOT
+
+
+def acquire_lock(lock) -> None:
+    if fcntl is not None:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return
+    lock.seek(0)
+    if lock.tell() == lock.seek(0, os.SEEK_END):
+        lock.write("0")
+        lock.flush()
+    lock.seek(0)
+    msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
 
 
 def publish_snapshot(candidate: Path, target: Path, rollback: Path):
@@ -65,8 +82,8 @@ def main():
     args.snapshots.mkdir(parents=True, exist_ok=True)
     with (args.snapshots / ".refresh.lock").open("a") as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            acquire_lock(lock)
+        except (BlockingIOError, OSError):
             print("Another refresh is active; no changes made", file=sys.stderr)
             return 3
         run_id = uuid4().hex

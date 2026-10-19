@@ -41,7 +41,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qau_advisor}:${POSTGRES_PASSWORD:-qau_advisor_local}@postgres:5432/${POSTGRES_DB:-qau_advisor}
-      APP_ENV: production
+      APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: "false"
       CORS_ORIGINS: '["http://localhost"]'
       NLP_CLASSIFIER_BACKEND: baseline
@@ -77,6 +77,7 @@ services:
     build:
       context: .
       dockerfile: deploy/advisor/Dockerfile
+    container_name: qau-advisor-engine
     restart: unless-stopped
     environment:
       ADVISOR_DATA_DIR: /data
@@ -84,11 +85,24 @@ services:
       ADVISOR_TRUST_PROXY_HEADERS: "true"
       ADVISOR_OLLAMA_BASE_URL: ${ADVISOR_OLLAMA_BASE_URL:-http://ollama:11434}
       ADVISOR_OLLAMA_MODEL: ${LLM_MODEL:-qwen3:8b}
+      ADVISOR_OLLAMA_NUM_CTX: ${ADVISOR_OLLAMA_NUM_CTX:-4096}
+      ADVISOR_ANSWER_TIMEOUT_SECONDS: ${ADVISOR_ANSWER_TIMEOUT_SECONDS:-240}
+      ADVISOR_GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      ADVISOR_GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
     volumes:
       - qau_advisor_engine_data:/data
+      - ./academic-data:/academic-data:ro
+      - ./scripts:/app/scripts:ro
+      - ./backend/advisor:/app/advisor
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
 
   web:
     build:
@@ -113,6 +127,7 @@ services:
     image: ollama/ollama:0.35.1
     profiles: ["local-llm"]
     restart: unless-stopped
+    gpus: all
     volumes:
       - qau_ollama_models:/root/.ollama
     environment:

@@ -335,14 +335,23 @@ def validate_claims(
 
 
 def fyp_rules_missing(query: str, hits: list[Hit]) -> bool:
+    def is_fyp_procedure_source(hit: Hit) -> bool:
+        content = hit.chunk.content
+        return bool(
+            hit.chunk.category in {"academic_policy", "thesis", "fyp_policy", "department_document"}
+            and re.search(r"\bfyp\b|final[ -]year.*project", content, re.I)
+            and re.search(
+                r"submission|submit|hand[ -]?in|report|format|defen[cs]e|viva|"
+                r"seminar|plagiarism|turnitin|hardbound|copies|source code",
+                content,
+                re.I,
+            )
+        )
+
     return bool(
         re.search(r"\bfyp\b|final[ -]year.*project", query, re.I)
         and re.search(r"submission|submit|rules|procedure|\bsop\b", query, re.I)
-        and not any(
-            h.chunk.category in {"academic_policy", "thesis", "fyp_policy"}
-            and re.search(r"\bfyp\b|final[ -]year.*project", h.chunk.content, re.I)
-            for h in hits
-        )
+        and not any(is_fyp_procedure_source(h) for h in hits)
     )
 
 

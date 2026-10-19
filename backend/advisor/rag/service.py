@@ -243,17 +243,17 @@ class AdvisorService:
         return [item, *passages]
 
     def _context_profile(self, search_q: str) -> tuple[int, int]:
-        """How much evidence to send. A local model reads ~400 tokens/s, so it gets a leaner
-        context; hosted models take the full set."""
+        """How much evidence to send. A local model on CPU reads ~15-20 tokens/s, so it gets a leaner
+        context (top 3 chunks, ~2400 chars) for fast response; hosted models like Gemini take the full set."""
         candidates = self.router.candidates()
         local = bool(candidates) and candidates[0].name == "ollama"
         k = int(self.rt.get("rag.context_chunks"))
         budget = self.s.context_char_budget
         if local:
-            k, budget = min(k, 7), min(budget, 8500)
+            k, budget = min(k, 3), min(budget, 2400)
         if wants_listing(search_q):
-            k += 3 if local else 4
-            budget += 2500 if local else 4000
+            k += 1 if local else 4
+            budget += 800 if local else 4000
         return k, budget
 
     def _passages(self, hits: list[Hit]) -> list[dict]:

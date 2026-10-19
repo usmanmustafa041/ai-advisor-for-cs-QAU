@@ -1,4 +1,5 @@
 from dataclasses import replace
+import os
 
 import httpx
 import pytest
@@ -144,7 +145,8 @@ def test_publication_keeps_previous_snapshot_for_rollback(tmp_path):
     live.with_suffix(".vectors.json").write_text("old fingerprint")
     publish_snapshot(candidate, live, rollback)
     assert live.read_text() == "new" and rollback.read_text() == "old"
-    assert live.stat().st_mode & 0o777 == 0o640
+    if os.name != "nt":
+        assert live.stat().st_mode & 0o777 == 0o640
     assert rollback.with_suffix(".vectors.json").read_text() == "old fingerprint"
 
 

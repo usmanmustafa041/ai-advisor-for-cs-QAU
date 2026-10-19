@@ -5,7 +5,7 @@ SRC-003,BS academic regulations,academic_policy,BS,QAU,https://qau.edu.pk/rules-
 SRC-004,MPhil examination rules,academic_policy,MPhil,QAU,https://qau.edu.pk/mphil-examination-rules/,,,2026-08-11,referenced,false,Archive an official copy or approved snapshot
 SRC-005,PhD procedures,academic_policy,PhD,QAU,https://qau.edu.pk/phd-procedures/,,,2026-08-11,referenced,false,Archive an official copy or approved snapshot
 SRC-006,Complete course prerequisite matrix,prerequisites,BSCS,QAU CS Department,,,,,,missing,false,Critical department-provided dataset
-SRC-007,Current class and lab timetable,timetable,ALL,QAU CS Department,,academic-data/timetable/,Fall 2026,,2026-08-11,missing,true,Critical operational dataset
+SRC-007,Current class and lab timetable,timetable,ALL,QAU CS Department,https://cs.qau.edu.pk/doc/timetable.pdf,academic-data/timetable/cs_timetable_fall-2026.json,2026-09-28,,2026-10-19,verified,true,"Reviewed structured transcription of the official Fall 2026 timetable; current department page labels timetable effective 28/9"
 SRC-008,Current registration and add-drop schedule,registration,ALL,QAU Registrar or CS Department,,academic-data/registration/,Fall 2026,,2026-08-11,missing,true,Critical operational dataset
 SRC-009,Current examination date sheet,exam_schedule,ALL,QAU CS Department or Examinations,,academic-data/exam-schedules/,Fall 2026,,2026-08-11,missing,true,Latest publicly located example was Spring 2025 and must not be treated as current
 SRC-010,Complete BSCS course outlines,course_outlines,BSCS,QAU CS Department,,academic-data/course-outlines/,,,,missing,false,Needed for complete course descriptions and document retrieval

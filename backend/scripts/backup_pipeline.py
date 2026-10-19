@@ -1,7 +1,6 @@
 """Create a private, checksummed backup of the live library, archive and optional database."""
 
 import argparse
-import fcntl
 import hashlib
 import io
 import json
@@ -12,6 +11,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from uuid import uuid4
@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.config import get_settings
 from app.ingestion.archive import atomic_write, utc_now
 from app.rag.corpus import PROJECT_ROOT, corpus_path
+from scripts.refresh_knowledge import acquire_lock
 
 
 def make_backup(output, archive, corpus, *, database_url=None):
@@ -31,7 +32,10 @@ def make_backup(output, archive, corpus, *, database_url=None):
         catalogue = archive / "catalogue.sqlite3"
         snapshot = temporary / "catalogue.sqlite3"
         if catalogue.exists():
-            with sqlite3.connect(catalogue) as source, sqlite3.connect(snapshot) as destination:
+            with (
+                closing(sqlite3.connect(catalogue)) as source,
+                closing(sqlite3.connect(snapshot)) as destination,
+            ):
                 source.backup(destination)
         database = temporary / "postgres.dump"
         if database_url:
@@ -135,7 +139,7 @@ def main():
     snapshots = PROJECT_ROOT / "backend/data/rag/snapshots"
     snapshots.mkdir(parents=True, exist_ok=True)
     with (snapshots / ".refresh.lock").open("a") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        acquire_lock(lock)
         manifest = make_backup(
             output,
             archive,

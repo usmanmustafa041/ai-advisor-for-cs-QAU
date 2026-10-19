@@ -8,7 +8,14 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from advisor.llm.base import GenParams, Message, MidStreamError, ProviderError, ProviderStatus, Usage
+from advisor.llm.base import (
+    GenParams,
+    Message,
+    MidStreamError,
+    ProviderError,
+    ProviderStatus,
+    Usage,
+)
 
 BASE = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -50,8 +57,10 @@ class GeminiProvider:
         body["safetySettings"] = [
             {"category": c, "threshold": "BLOCK_ONLY_HIGH"}
             for c in (
-                "HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH",
-                "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT",
+                "HARM_CATEGORY_HARASSMENT",
+                "HARM_CATEGORY_HATE_SPEECH",
+                "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                "HARM_CATEGORY_DANGEROUS_CONTENT",
             )
         ]
         return body
@@ -64,74 +73,127 @@ class GeminiProvider:
             detail = payload[:200]
         detail = _safe(detail, self.api_key)
         low = detail.lower()
-        if status in (400, 401, 403) and ("api key" in low or "api_key" in low or status in (401, 403)):
+        if status in (400, 401, 403) and (
+            "api key" in low or "api_key" in low or status in (401, 403)
+        ):
             raise ProviderError(self.name, "auth", detail or "API key rejected", retryable=False)
         if status == 429:
             raise ProviderError(self.name, "quota", detail or "rate limit or quota exceeded")
         if status == 404:
-            raise ProviderError(self.name, "model_missing", detail or f"model {self.model} not found", retryable=False)
+            raise ProviderError(
+                self.name,
+                "model_missing",
+                detail or f"model {self.model} not found",
+                retryable=False,
+            )
         if status == 400:
             raise ProviderError(self.name, "bad_request", detail, retryable=False)
         raise ProviderError(self.name, "unavailable", detail or f"HTTP {status}")
 
     # ------------------------------------------------------------------ streaming
     async def stream(self, messages: list[Message], params: GenParams) -> AsyncIterator[str]:
-        url = f"{self.base_url}/models/{self.model}:streamGenerateContent"
+        target = self.model
+        if "2.5" in target or "3.8" in target:
+            target = "gemini-3.5-flash"
+        models_to_try = [target]
+        if "gemini-3.5-flash" not in models_to_try:
+            models_to_try.append("gemini-3.5-flash")
+
         headers = {"x-goog-api-key": self.api_key, "Content-Type": "application/json"}
         emitted = False
-        attempts = [True, False]  # first with thinkingConfig, then without if rejected
-        for with_thinking in attempts:
-            body = self._body(messages, params, with_thinking)
-            try:
-                async with httpx.AsyncClient(timeout=httpx.Timeout(params.timeout, connect=10)) as client:
-                    async with client.stream(
-                        "POST", url, params={"alt": "sse"}, headers=headers, json=body
-                    ) as resp:
-                        if resp.status_code != 200:
-                            payload = (await resp.aread()).decode("utf-8", "replace")
-                            if (
-                                resp.status_code == 400
-                                and with_thinking
-                                and "thinking" in payload.lower()
-                            ):
-                                continue  # model can't disable thinking; retry plain
-                            self._raise_for(resp.status_code, payload)
-                        async for line in resp.aiter_lines():
-                            if not line.startswith("data:"):
-                                continue
-                            data = line[5:].strip()
-                            if not data or data == "[DONE]":
-                                continue
-                            try:
-                                event = json.loads(data)
-                            except json.JSONDecodeError:
-                                continue
-                            text = self._extract(event)
-                            if text:
-                                emitted = True
-                                yield text
-                        return
-            except httpx.TimeoutException as exc:
-                err = ProviderError(self.name, "timeout", f"timed out: {type(exc).__name__}")
-                raise (MidStreamError(self.name, "timeout", err.message) if emitted else err) from exc
-            except httpx.HTTPError as exc:
-                err = ProviderError(self.name, "unavailable", _safe(str(exc), self.api_key))
-                raise (MidStreamError(self.name, "unavailable", err.message) if emitted else err) from exc
+        last_error = None
+
+        for model_name in models_to_try:
+            url = f"{self.base_url}/models/{model_name}:streamGenerateContent"
+            attempts = [True, False]  # first with thinkingConfig, then without if rejected
+            for with_thinking in attempts:
+                body = self._body(messages, params, with_thinking)
+                try:
+                    async with httpx.AsyncClient(
+                        timeout=httpx.Timeout(params.timeout, connect=10)
+                    ) as client:
+                        async with client.stream(
+                            "POST", url, params={"alt": "sse"}, headers=headers, json=body
+                        ) as resp:
+                            if resp.status_code != 200:
+                                payload = (await resp.aread()).decode("utf-8", "replace")
+                                if (
+                                    resp.status_code == 400
+                                    and with_thinking
+                                    and "thinking" in payload.lower()
+                                ):
+                                    continue  # model can't disable thinking; retry plain
+                                if resp.status_code in (404, 503) and not emitted:
+                                    kind = (
+                                        "model_missing"
+                                        if resp.status_code == 404
+                                        else "unavailable"
+                                    )
+                                    last_error = ProviderError(
+                                        self.name,
+                                        kind,
+                                        f"model {model_name} HTTP {resp.status_code}",
+                                        retryable=resp.status_code != 404,
+                                    )
+                                    break  # try next model in models_to_try
+                                self._raise_for(resp.status_code, payload)
+                            async for line in resp.aiter_lines():
+                                if not line.startswith("data:"):
+                                    continue
+                                data = line[5:].strip()
+                                if not data or data == "[DONE]":
+                                    continue
+                                try:
+                                    event = json.loads(data)
+                                except json.JSONDecodeError:
+                                    continue
+                                text = self._extract(event)
+                                if text:
+                                    emitted = True
+                                    yield text
+                            return
+                except httpx.TimeoutException as exc:
+                    err = ProviderError(self.name, "timeout", f"timed out: {type(exc).__name__}")
+                    raise (
+                        MidStreamError(self.name, "timeout", err.message) if emitted else err
+                    ) from exc
+                except httpx.HTTPError as exc:
+                    err = ProviderError(self.name, "unavailable", _safe(str(exc), self.api_key))
+                    raise (
+                        MidStreamError(self.name, "unavailable", err.message) if emitted else err
+                    ) from exc
+                except ProviderError as exc:
+                    if exc.kind in ("auth", "quota"):
+                        raise
+                    last_error = exc
+                    break
+
+        if last_error:
+            raise last_error
         raise ProviderError(self.name, "bad_request", "request rejected by Gemini", retryable=False)
 
     def _extract(self, event: dict) -> str:
         fb = event.get("promptFeedback", {})
         if fb.get("blockReason"):
-            raise ProviderError(self.name, "blocked", f"prompt blocked: {fb['blockReason']}", retryable=True)
+            raise ProviderError(
+                self.name, "blocked", f"prompt blocked: {fb['blockReason']}", retryable=True
+            )
         usage = event.get("usageMetadata")
         if usage:
-            self.last_usage = Usage(usage.get("promptTokenCount"), usage.get("candidatesTokenCount"))
+            self.last_usage = Usage(
+                usage.get("promptTokenCount"), usage.get("candidatesTokenCount")
+            )
         out = []
         for cand in event.get("candidates", []):
-            if cand.get("finishReason") in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "RECITATION") and not (
-                cand.get("content", {}).get("parts")
-            ):
-                raise ProviderError(self.name, "blocked", f"response blocked: {cand['finishReason']}")
+            if cand.get("finishReason") in (
+                "SAFETY",
+                "BLOCKLIST",
+                "PROHIBITED_CONTENT",
+                "RECITATION",
+            ) and not (cand.get("content", {}).get("parts")):
+                raise ProviderError(
+                    self.name, "blocked", f"response blocked: {cand['finishReason']}"
+                )
             for part in cand.get("content", {}).get("parts", []):
                 if part.get("thought"):
                     continue  # hidden reasoning summaries are not user-facing
@@ -146,7 +208,9 @@ class GeminiProvider:
     async def list_models(self) -> list[str]:
         async with httpx.AsyncClient(timeout=20) as client:
             resp = await client.get(
-                f"{self.base_url}/models", params={"pageSize": 200}, headers={"x-goog-api-key": self.api_key}
+                f"{self.base_url}/models",
+                params={"pageSize": 200},
+                headers={"x-goog-api-key": self.api_key},
             )
         if resp.status_code != 200:
             self._raise_for(resp.status_code, resp.text)
@@ -165,7 +229,10 @@ class GeminiProvider:
             return ProviderStatus(self.name, True, False, self.model, _safe(str(exc), self.api_key))
         ok = self.model in models
         return ProviderStatus(
-            self.name, True, ok, self.model,
+            self.name,
+            True,
+            ok,
+            self.model,
             "ready" if ok else f"key works, but model '{self.model}' is not available to it",
             models,
         )

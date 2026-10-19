@@ -5,7 +5,6 @@ from collections import Counter, defaultdict
 from functools import lru_cache
 from pathlib import Path
 
-
 DATASET_PATH = Path(__file__).resolve().parents[2] / "data" / "intent_dataset.csv"
 TOKEN_PATTERN = re.compile(r"[a-z0-9]+")
 
@@ -71,4 +70,9 @@ IntentClassifier = NgramIntentClassifier
 def get_classifier():
     from app.nlp.transformer import get_intent_classifier
 
-    return get_intent_classifier()
+    try:
+        return get_intent_classifier()
+    except (OSError, ImportError, ValueError):
+        # A checkout may intentionally omit the large trained weight file.
+        # Keep the API available with the tested offline baseline.
+        return get_baseline_classifier()

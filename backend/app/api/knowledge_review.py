@@ -175,9 +175,7 @@ class PublicationRequest(BaseModel):
 
 @router.post("/publish")
 def publish(request: PublicationRequest, user: Admin, archive: Archive):
-    import fcntl
-
-    from scripts.refresh_knowledge import publish_snapshot
+    from scripts.refresh_knowledge import acquire_lock, publish_snapshot
 
     snapshots = BACKEND_ROOT / "data/rag/snapshots"
     directory = snapshots / request.snapshot_id
@@ -186,8 +184,8 @@ def publish(request: PublicationRequest, user: Admin, archive: Archive):
         raise HTTPException(404, "Snapshot not found")
     with (snapshots / ".refresh.lock").open("a") as lock:
         try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            acquire_lock(lock)
+        except (BlockingIOError, OSError):
             raise HTTPException(409, "A knowledge refresh is active") from None
         report_path = directory / "refresh_report.json"
         report = json.loads(report_path.read_text()) if report_path.exists() else {}

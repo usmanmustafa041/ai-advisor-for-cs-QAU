@@ -41,7 +41,7 @@ SPECS: dict[str, Spec] = {
         Spec("gemini.api_key", "str", "", "Gemini API key",
              "Paste a key from Google AI Studio. Stored encrypted; never shown again.",
              secret=True, group="ai"),
-        Spec("gemini.model", "str", "gemini-2.5-flash", "Gemini model",
+        Spec("gemini.model", "str", "gemini-3.5-flash", "Gemini model",
              "Any model that supports generateContent (use 'Load models' to list them).", group="ai"),
         Spec("gemini.enabled", "bool", True, "Use Gemini when a key is configured", group="ai"),
         Spec("gemini.thinking_budget", "int", 0, "Gemini thinking budget (tokens)",

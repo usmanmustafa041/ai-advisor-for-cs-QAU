@@ -47,10 +47,24 @@ INTENT_DIRECTORY = re.compile(
     r"list of (faculty|professors)|who are the)\b",
     re.I,
 )
-INTENT_FEES = re.compile(r"\b(fees?|tuition|dues|challan|charges?|cost|payable|scholarship)\b", re.I)
-INTENT_ADMISSION = re.compile(r"\b(admissions?|apply|applying|last date|deadline|merit|entry test|test date)\b", re.I)
-GENERIC_WORDS = frozenset("course courses prerequisite prerequisites class credit hours subject".split())
-INTENT_LISTING = re.compile(r"\b(list|all|which courses|what courses|every|names? of|how many)\b", re.I)
+INTENT_FEES = re.compile(
+    r"\b(fees?|tuition|dues|challan|charges?|cost|payable|scholarship)\b", re.I
+)
+INTENT_ADMISSION = re.compile(
+    r"\b(admissions?|apply|applying|last date|deadline|merit|entry test|test date)\b", re.I
+)
+INTENT_FYP_PROCEDURE = re.compile(
+    r"\b(?:fyp|final[ -]year project)\b.*\b(?:submission|submit|rules?|procedure|sop|"
+    r"report|format|defen[cs]e|viva|plagiarism|hardbound)\b|"
+    r"\b(?:submission|submit|rules?|procedure|sop)\b.*\b(?:fyp|final[ -]year project)\b",
+    re.I,
+)
+GENERIC_WORDS = frozenset(
+    "course courses prerequisite prerequisites class credit hours subject".split()
+)
+INTENT_LISTING = re.compile(
+    r"\b(list|all|which courses|what courses|every|names? of|how many)\b", re.I
+)
 
 
 def wants_listing(query: str) -> bool:
@@ -69,7 +83,7 @@ class Retriever:
         self.rerank_top = 12  # candidates the cross-encoder scores; the dominant per-query CPU cost
         self._name_tokens: dict[str, set[str]] = {}
         token_owner: dict[str, set[str]] = {}
-        for key, ent in bundle.faculty.items():
+        for key in bundle.faculty:
             toks = {t for t in re.findall(r"[a-z]+", key) if t not in TITLES and len(t) >= 3}
             self._name_tokens[key] = toks
             for t in toks:
@@ -83,9 +97,7 @@ class Retriever:
                 self._course_phrases.append((plain, code))
         # longest phrases first so "advanced operating systems" beats "operating systems"
         self._course_phrases.sort(key=lambda p: -len(p[0]))
-        self._course_tokens = [
-            (set(plain.split()), code) for plain, code in self._course_phrases
-        ]
+        self._course_tokens = [(set(plain.split()), code) for plain, code in self._course_phrases]
 
     # ------------------------------------------------------------------ analysis
     def entities(self, query: str) -> QueryEntities:
@@ -99,9 +111,12 @@ class Retriever:
                 consumed = consumed.replace(f" {phrase} ", " ")
             if len(name_codes) >= 4:
                 break
-        if not name_codes:  # partial names: "computer networks" -> Computer Communications and Networks
+        if (
+            not name_codes
+        ):  # partial names: "computer networks" -> Computer Communications and Networks
             q_content = {
-                t for t in re.findall(r"[a-z]+", query.lower())
+                t
+                for t in re.findall(r"[a-z]+", query.lower())
                 if t not in STOPWORDS and t not in GENERIC_WORDS and len(t) >= 4
             }
             if len(q_content) >= 2:
@@ -115,7 +130,9 @@ class Retriever:
                 scores[key] = scores.get(key, 0) + (2 if len(self._token_owner[t]) == 1 else 1)
         faculty = []
         for key, sc in sorted(scores.items(), key=lambda kv: -kv[1]):
-            ambiguous_only = all(len(self._token_owner[t]) > 1 for t in qtoks if t in self._name_tokens[key])
+            ambiguous_only = all(
+                len(self._token_owner[t]) > 1 for t in qtoks if t in self._name_tokens[key]
+            )
             # a lone shared token ("khan", "saeed") is too weak; a unique one or two tokens suffice
             if sc >= 2 and not (ambiguous_only and sc < 3):
                 faculty.append(key)
@@ -125,11 +142,20 @@ class Retriever:
             codes=codes,
             faculty=faculty[:3],
             course_name_codes=name_codes,
-            wants_publications=bool(re.search(r"publication|paper|journal|published|research output", query, re.I)),
+            wants_publications=bool(
+                re.search(r"publication|paper|journal|published|research output", query, re.I)
+            ),
         )
 
     # ------------------------------------------------------------------ search
-    def search(self, query: str, *, k: int = 40, rerank_top: int | None = None, extra_query: str | None = None) -> list[Hit]:
+    def search(
+        self,
+        query: str,
+        *,
+        k: int = 40,
+        rerank_top: int | None = None,
+        extra_query: str | None = None,
+    ) -> list[Hit]:
         b = self.b
         ents = self.entities(query)
         lex_query = expand_query(query if not extra_query else f"{query} {extra_query}")
@@ -149,7 +175,9 @@ class Retriever:
             fused[i] = fused.get(i, 0) + 1.0 / (RRF_K + r)
         for i, r in r_dv.items():
             fused[i] = fused.get(i, 0) + 1.0 / (RRF_K + r)
-        parts: dict[int, dict] = {i: {"bm25_rank": r_bm.get(i), "dense_rank": r_dv.get(i)} for i in fused}
+        parts: dict[int, dict] = {
+            i: {"bm25_rank": r_bm.get(i), "dense_rank": r_dv.get(i)} for i in fused
+        }
 
         def boost(i: int, amount: float, why: str):
             fused[i] = fused.get(i, 0) + amount
@@ -188,12 +216,24 @@ class Retriever:
                     boost(i, 0.03, "faculty")
         if INTENT_ADMISSION.search(query):
             for i, c in enumerate(b.chunks):
-                if c["kind"] in ("admissions", "external") and "admission" in c["url"].lower() and i in fused:
+                if (
+                    c["kind"] in ("admissions", "external")
+                    and "admission" in c["url"].lower()
+                    and i in fused
+                ):
                     boost(i, 0.01, "intent_admission")
         if INTENT_FEES.search(query):
             for i, c in enumerate(b.chunks):
                 if "fee" in c["url"].lower() and i in fused:
                     boost(i, 0.02, "intent_fees")
+        if INTENT_FYP_PROCEDURE.search(query):
+            for i, c in enumerate(b.chunks):
+                if c["kind"] == "department_document" and re.search(
+                    r"\bfyp\b|final[ -]year project", c["index_text"], re.I
+                ):
+                    # Department-maintained SOPs must outrank the generic BS page,
+                    # which only says that the project is compulsory.
+                    boost(i, 0.06, "intent_fyp_procedure")
         # OCR text is lossy (garbled dates/numbers): clean sources must win when both match
         for i in list(fused):
             if (b.chunks[i].get("meta") or {}).get("ocr") and b.chunks[i]["kind"] == "document":
@@ -234,7 +274,9 @@ class Retriever:
             hits = top + hits[rerank_top:]
         return hits
 
-    def context(self, hits: list[Hit], *, max_chunks: int, char_budget: int, per_doc: int = 8) -> list[Hit]:
+    def context(
+        self, hits: list[Hit], *, max_chunks: int, char_budget: int, per_doc: int = 8
+    ) -> list[Hit]:
         """Pick the final evidence set: best-first, bounded per document and by size."""
         chosen: list[Hit] = []
         per: dict[str, int] = {}
