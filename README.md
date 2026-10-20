@@ -5,6 +5,8 @@ It answers students' questions from the department website (<https://cs.qau.edu.
 links to — courses, prerequisites, schemes of study, faculty, admissions, fees, the academic calendar,
 timetables and regulations — in English, Urdu and Roman Urdu, with citations.
 
+**Deploying on the department server:** follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 **Start here:** use the Docker Compose setup below to run the full portal, then see
 [docs/ADVISOR.md](docs/ADVISOR.md) (architecture, operations, admin guide, limits) and
 [docs/PREREQUISITES.md](docs/PREREQUISITES.md) (prerequisite chains, data sources, adding schemes).
@@ -34,7 +36,7 @@ git clone https://github.com/usmanmustafa041/ai-advisor-for-cs-QAU.git
 cd ai-advisor-for-cs-QAU
 ```
 
-Optionally create a local environment file from the committed template; never commit real credentials:
+Create the environment file from the committed template (required); never commit real credentials:
 
 ```powershell
 Copy-Item .env.example .env
@@ -44,7 +46,7 @@ Copy-Item .env.example .env
 cp .env.example .env
 ```
 
-Change `POSTGRES_PASSWORD` and `AUTH_SECRET` in `.env` before using the stack beyond a local demo.
+Fill in `POSTGRES_PASSWORD` and `AUTH_SECRET` in `.env` (the stack refuses to start without them).
 Then build and start the application from the repository root:
 
 ```bash

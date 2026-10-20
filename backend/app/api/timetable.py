@@ -1,10 +1,11 @@
 """
-Timetable API endpoints for Spring 2026 schedule queries.
+Timetable API endpoints for the published class schedule (current term by default).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+import re
 from typing import Optional
 
 from app.core.database import get_db
@@ -18,6 +19,33 @@ from app.schemas.timetable import (
 )
 
 router = APIRouter(prefix="/timetable", tags=["timetable"])
+
+# CS-212, CSC-212, csc 212 and CSC212 are the same course (the timetable PDF prints "CS-", the catalogue "CSC-").
+_CODE_SQL = "regexp_replace(regexp_replace(upper({}), '[^A-Z0-9]', '', 'g'), '^CSC', 'CS')"
+_ROMAN = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI", 7: "VII", 8: "VIII"}
+
+
+def resolve_session(session_name: Optional[str] = Query(default=None, description="Academic session (default: current)"),
+                    db: Session = Depends(get_db)) -> str:
+    if session_name:
+        return session_name
+    current = db.execute(text("""SELECT session_name FROM academic_sessions
+        ORDER BY is_current DESC, effective_from DESC LIMIT 1""")).scalar()
+    return current or ""
+
+
+def _room_value(room: str) -> str:
+    return re.sub(r"(?i)^\s*room\s*(no\.?)?\s*", "", room).strip() or room.strip()
+
+
+def _semester_pattern(semester: str) -> str | None:
+    """'3', 'Semester 3', 'sem III' -> a regex matching that semester's class groups (not II or IV)."""
+    m = re.search(r"\b([1-8]|VIII|VII|VI|IV|V|III|II|I)\b", semester.strip(), re.IGNORECASE)
+    if not m:
+        return None
+    token = m.group(1).upper()
+    roman = _ROMAN[int(token)] if token.isdigit() else token
+    return rf"\mSemester\s+([IVX]+\s*\+\s*)*{roman}\M"
 
 
 @router.get("/sessions", response_model=list[SessionInfo])
@@ -52,7 +80,7 @@ def get_academic_sessions(
 
 @router.get("/schedule", response_model=TimetableResponse)
 def get_schedule(
-    session_name: str = Query(default="Spring 2026", description="Academic session"),
+    session_name: str = Depends(resolve_session),
     day: Optional[str] = Query(default=None, description="Filter by day (Monday, Tuesday, etc.)"),
     course_code: Optional[str] = Query(default=None, description="Filter by course code"),
     room: Optional[str] = Query(default=None, description="Filter by room"),
@@ -76,20 +104,25 @@ def get_schedule(
         params["day"] = day
     
     if course_code:
-        conditions.append("UPPER(cs.course_code) = UPPER(:course_code)")
+        conditions.append(f"{_CODE_SQL.format('cs.course_code')} = {_CODE_SQL.format(':course_code')}")
         params["course_code"] = course_code
     
     if room:
         conditions.append("cs.room ILIKE :room")
-        params["room"] = f"%{room}%"
+        params["room"] = f"%{_room_value(room)}%"
     
     if program:
         conditions.append("cs.program ILIKE :program")
         params["program"] = f"%{program}%"
     
     if semester:
-        conditions.append("cs.semester ILIKE :semester")
-        params["semester"] = f"%{semester}%"
+        pattern = _semester_pattern(semester)
+        if pattern:
+            conditions.append("cs.semester ~* :semester")
+            params["semester"] = pattern
+        else:
+            conditions.append("cs.semester ILIKE :semester")
+            params["semester"] = f"%{semester}%"
     
     if instructor:
         conditions.append("EXISTS (SELECT 1 FROM course_schedule_instructors csi JOIN instructors i ON i.id = csi.instructor_id WHERE csi.course_schedule_id = cs.id AND i.name ILIKE :instructor)")
@@ -170,7 +203,7 @@ def get_schedule(
 @router.get("/course/{course_code}", response_model=CourseScheduleDetail)
 def get_course_schedule(
     course_code: str,
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     db: Session = Depends(get_db),
 ) -> dict:
     """
@@ -206,7 +239,7 @@ def get_course_schedule(
         LEFT JOIN instructors i ON csi.instructor_id = i.id
         LEFT JOIN course_schedule_tas csta ON cs.id = csta.course_schedule_id
         LEFT JOIN teaching_assistants ta ON csta.ta_id = ta.id
-        WHERE UPPER(cs.course_code) = UPPER(:course_code)
+        WHERE """ + _CODE_SQL.format("cs.course_code") + " = " + _CODE_SQL.format(":course_code") + """
             AND asess.session_name = :session_name
             AND cs.is_active = TRUE
         GROUP BY 
@@ -251,7 +284,7 @@ def get_course_schedule(
 @router.get("/instructor/{instructor_name}", response_model=InstructorSchedule)
 def get_instructor_schedule(
     instructor_name: str,
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     db: Session = Depends(get_db),
 ) -> dict:
     """
@@ -320,7 +353,7 @@ def get_instructor_schedule(
 @router.get("/room/{room_name}", response_model=RoomSchedule)
 def get_room_schedule(
     room_name: str,
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     db: Session = Depends(get_db),
 ) -> dict:
     """
@@ -387,7 +420,7 @@ def get_room_schedule(
 @router.get("/day/{day_name}")
 def get_day_schedule(
     day_name: str,
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     program: Optional[str] = None,
     db: Session = Depends(get_db),
 ) -> dict:
@@ -456,7 +489,7 @@ def get_day_schedule(
 @router.get("/search")
 def search_schedule(
     q: str = Query(description="Search query (course code, name, instructor, or room)"),
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     db: Session = Depends(get_db),
 ) -> dict:
     """
@@ -487,6 +520,7 @@ def search_schedule(
             AND cs.is_active = TRUE
             AND (
                 cs.course_code ILIKE :search
+                OR """ + _CODE_SQL.format("cs.course_code") + " = " + _CODE_SQL.format(":raw") + """
                 OR cs.course_name ILIKE :search
                 OR cs.course_abbreviation ILIKE :search
                 OR cs.room ILIKE :search
@@ -516,7 +550,7 @@ def search_schedule(
     
     rows = db.execute(
         text(query),
-        {"session_name": session_name, "search": f"%{q}%"}
+        {"session_name": session_name, "search": f"%{q}%", "raw": q}
     ).mappings()
     
     results = [dict(row) for row in rows]
@@ -532,6 +566,7 @@ def search_schedule(
 @router.get("/instructors")
 def list_instructors(
     active_only: bool = True,
+    session_name: Optional[str] = Query(default=None, description="Only instructors teaching in this session"),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """
@@ -548,16 +583,21 @@ def list_instructors(
             is_active
         FROM instructors
         WHERE (:active_only = FALSE OR is_active = TRUE)
+            AND (CAST(:session_name AS text) IS NULL OR EXISTS (
+                SELECT 1 FROM course_schedule_instructors csi
+                JOIN course_schedules cs ON cs.id = csi.course_schedule_id
+                JOIN academic_sessions asess ON asess.id = cs.academic_session_id
+                WHERE csi.instructor_id = instructors.id AND asess.session_name = :session_name))
         ORDER BY name
     """
     
-    rows = db.execute(text(query), {"active_only": active_only}).mappings()
+    rows = db.execute(text(query), {"active_only": active_only, "session_name": session_name}).mappings()
     return [dict(row) for row in rows]
 
 
 @router.get("/rooms")
 def list_rooms(
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     db: Session = Depends(get_db),
 ) -> list[dict]:
     """
@@ -583,7 +623,7 @@ def list_rooms(
 
 @router.get("/stats")
 def get_timetable_stats(
-    session_name: str = Query(default="Spring 2026"),
+    session_name: str = Depends(resolve_session),
     db: Session = Depends(get_db),
 ) -> dict:
     """

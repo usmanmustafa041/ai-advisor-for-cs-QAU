@@ -72,6 +72,12 @@ class Settings(BaseSettings):
     # Optional single sign-on with an existing student/admin portal: the URL of its "who am I" endpoint
     # (e.g. http://127.0.0.1:8001/api/v1/auth/me). The caller's Authorization header is forwarded to it.
     auth_verify_url: str = ""
+    # Where admin timetable edits are published for the portal's student Timetable page.
+    # Empty = derived from auth_verify_url (".../auth/me" -> ".../admin/timetable/published").
+    portal_timetable_url: str = ""
+    # The portal's verified policies/fees/courses/knowledge/CMS export the chatbot answers from.
+    # Empty = derived from auth_verify_url (".../auth/me" -> ".../admin/chatbot-export").
+    portal_export_url: str = ""
     bootstrap_admin_user: str = ""
     bootstrap_admin_password: str = ""
     session_hours: int = 12

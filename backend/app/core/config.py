@@ -1,12 +1,19 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BACKEND_DIR = Path(__file__).resolve().parents[2]
+
 
 class Settings(BaseSettings):
+    # Resolved from this file, not the working directory, so the same files load
+    # whether uvicorn is started from the repository root or from backend/.
+    # backend/.env (local, non-Docker runs) overrides the repository-root .env;
+    # real environment variables (as set by Docker Compose) override both.
     model_config = SettingsConfigDict(
-        env_file=(".env", "backend/.env"),
+        env_file=(BACKEND_DIR.parent / ".env", BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -18,6 +25,9 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+psycopg://qau_advisor:qau_advisor_local@localhost:55432/qau_advisor"
     )
+    # The chatbot engine's portal-sync endpoint, called after admins change policies, fees,
+    # courses, knowledge or CMS entries so chatbot answers pick up the change. Empty = off.
+    chatbot_sync_url: str = ""
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://localhost:5173", "http://localhost:3000"]
     )

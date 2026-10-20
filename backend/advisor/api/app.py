@@ -37,6 +37,14 @@ def bootstrap_admin(ctx: Context) -> None:
         log.warning("No administrator exists. Create one with: python -m advisor.cli create-admin")
 
 
+def fail_interrupted_jobs(ctx: Context) -> None:
+    """A restart kills background refreshes; left as 'running' they would block every later refresh."""
+    ctx.db.execute(
+        "UPDATE jobs SET status='failed', finished_at=strftime('%Y-%m-%dT%H:%M:%SZ','now'), "
+        "detail='Interrupted by a server restart; start the refresh again.' WHERE status='running'"
+    )
+
+
 async def retention_loop(ctx: Context) -> None:
     """Delete old conversations and logs once a day (privacy by default)."""
     while True:
@@ -65,6 +73,7 @@ def create_app(ctx: Context | None = None, settings: Settings | None = None) -> 
             context.settings.rate_limit_per_minute, context.settings.rate_limit_burst
         )
         bootstrap_admin(context)
+        fail_interrupted_jobs(context)
         if not context.kb.ready:
             await asyncio.to_thread(context.kb.load)  # model load takes a few seconds
         task = asyncio.create_task(retention_loop(context))

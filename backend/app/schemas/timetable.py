@@ -33,7 +33,7 @@ class TimetableEntry(BaseModel):
     course_code: str
     course_abbreviation: Optional[str] = None
     course_name: str
-    credit_hours: str
+    credit_hours: str | None = None  # the Fall 2026 PDF timetable does not list credit hours
     program: str
     semester: str
     section_type: str
@@ -55,7 +55,7 @@ class CourseScheduleDetail(BaseModel):
 
     course_code: str
     course_name: str
-    credit_hours: str
+    credit_hours: str | None = None  # the Fall 2026 PDF timetable does not list credit hours
     session_name: str
     schedules: list[dict]
 

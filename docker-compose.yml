@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-qau_advisor}
       POSTGRES_USER: ${POSTGRES_USER:-qau_advisor}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qau_advisor_local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
     ports:
       - "127.0.0.1:${POSTGRES_PORT:-55432}:5432"
     volumes:
@@ -40,14 +40,16 @@ services:
     container_name: qau-advisor-backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qau_advisor}:${POSTGRES_PASSWORD:-qau_advisor_local}@postgres:5432/${POSTGRES_DB:-qau_advisor}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-qau_advisor}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-qau_advisor}
       APP_ENV: ${APP_ENV:-production}
       APP_DEBUG: "false"
-      CORS_ORIGINS: '["http://localhost"]'
-      NLP_CLASSIFIER_BACKEND: baseline
+      # Nginx serves the UI and API from one origin, so CORS only matters for other origins.
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost"]}
+      NLP_CLASSIFIER_BACKEND: ${NLP_CLASSIFIER_BACKEND:-baseline}
+      NLP_MAX_LENGTH: ${NLP_MAX_LENGTH:-128}
       NLP_MODEL_NAME: ${NLP_MODEL_NAME:-distilbert-base-multilingual-cased}
       NLP_MODEL_PATH: ${NLP_MODEL_PATH:-models/qau-intent-distilmbert}
-      AUTH_SECRET: ${AUTH_SECRET:-qau-local-demo-change-before-production-2026}
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env (64 random characters)}
       EMBEDDING_PROVIDER: sentence-transformer
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-intfloat/multilingual-e5-small}
       EMBEDDING_LOCAL_FILES_ONLY: "true"
@@ -57,6 +59,12 @@ services:
       LLM_MODEL: ${LLM_MODEL:-qwen3:8b}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-45}
+      LLM_CHECK_CLAIMS: ${LLM_CHECK_CLAIMS:-true}
+      CMS_ENABLED: ${CMS_ENABLED:-false}
+      STUDENT_ALLOWED_FIELDS: ${STUDENT_ALLOWED_FIELDS:-[]}
+      DATA_RETENTION_DAYS: ${DATA_RETENTION_DAYS:-30}
+      # Admin edits to policies/fees/courses/knowledge/CMS are pushed into the chatbot's answers.
+      CHATBOT_SYNC_URL: ${CHATBOT_SYNC_URL:-http://advisor:8000/api/v1/admin/knowledge/portal-sync}
     volumes:
       - ./backend/data/rag:/app/data/rag
       - ./academic-data/crawl-archive:/app/runtime/crawl-archive

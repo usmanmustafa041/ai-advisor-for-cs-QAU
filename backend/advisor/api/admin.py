@@ -7,6 +7,8 @@ import json
 import logging
 import time
 
+import httpx
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -256,6 +258,34 @@ async def refresh(
     ).lastrowid
     tasks.add_task(asyncio.to_thread, _run_refresh, ctx, job_id, body.crawl)
     return {"job_id": job_id}
+
+
+_portal_lock = asyncio.Lock()  # overlapping syncs run one after another; each re-reads the whole export
+
+
+@router.post("/knowledge/portal-sync")
+async def portal_sync_now(request: Request, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+    """Re-read the portal's verified records (policies, fees, courses, knowledge, CMS) into the chatbot."""
+    from advisor import portal_sync
+
+    if ctx.kb.encoder is None:
+        raise HTTPException(status_code=503, detail="The knowledge base is still loading; try again shortly")
+    async with _portal_lock:
+        try:
+            records = await portal_sync.fetch(ctx.settings, request.headers.get("authorization", ""))
+        except (RuntimeError, httpx.HTTPError, ValueError, KeyError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)[:300]) from exc
+        async with ctx.kb._compute:
+            chunks, vectors = await asyncio.to_thread(portal_sync.build, records, ctx.kb.encoder)
+        model = ctx.kb.encoder.name
+        await asyncio.to_thread(portal_sync.save, portal_sync.store_dir(ctx.settings), chunks, vectors, model)
+        await asyncio.to_thread(ctx.kb.set_portal_records, chunks, vectors, model)
+        ctx.service.cache.clear()  # earlier answers may quote the old records
+    sections: dict[str, int] = {}
+    for r in records:
+        sections[r.get("section", "other")] = sections.get(r.get("section", "other"), 0) + 1
+    log.info("portal sync by %s: %d records, %d passages", admin["username"], len(records), len(chunks))
+    return {"records": len(records), "passages": len(chunks), "sections": sections}
 
 
 @router.post("/knowledge/rollback")
@@ -582,6 +612,45 @@ def _tt(ctx: Context):
     return ctx.service.timetables
 
 
+def _portal_timetable_url(ctx: Context) -> str:
+    s = ctx.settings
+    if s.portal_timetable_url:
+        return s.portal_timetable_url
+    if s.auth_verify_url.endswith("/auth/me"):
+        return s.auth_verify_url[: -len("/auth/me")] + "/admin/timetable/published"
+    return ""
+
+
+async def _publish_timetable(request: Request, ctx: Context) -> None:
+    """Copy the effective timetable to the portal so the students' Timetable page matches the chatbot.
+    Uses the admin's own portal session; the edit is already saved, so a failure is only logged."""
+    url = _portal_timetable_url(ctx)
+    header = request.headers.get("authorization", "")
+    if not url or not header.lower().startswith("bearer "):
+        return
+    tt = _tt(ctx).current()
+    if tt is None or not tt.data.get("term"):
+        return
+    sessions = []
+    for s in tt.sessions:
+        # Resolve teacher and class group per section, exactly as chatbot answers do
+        # (one course can have a different teacher for its Regular and Self Support sections).
+        rows = tt._rows(s)
+        cls, course = rows[0] if rows else ({}, {})
+        sessions.append({**s, "code": s.get("key") or s.get("code"), "printed_code": s.get("code"),
+                         "teacher": s.get("teacher") or course.get("teacher", ""),
+                         "title": s.get("title") or course.get("title", ""),
+                         "group": cls.get("group", ""), "program": cls.get("program") or s.get("program", "")})
+    body = {"term": tt.term, "effective": tt.effective, "classes": [], "sessions": sessions}
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.put(url, json=body, headers={"Authorization": header})
+        if resp.status_code != 200:
+            log.warning("timetable publish to portal failed: HTTP %s %s", resp.status_code, resp.text[:200])
+    except httpx.HTTPError as exc:
+        log.warning("timetable publish to portal failed: %s", exc)
+
+
 def _tt_call(fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
@@ -595,49 +664,66 @@ async def timetable_view(admin=Depends(admin_required), ctx: Context = Depends(g
 
 
 @router.put("/timetable/settings")
-async def timetable_settings(body: TTSettingsIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_settings(request: Request, body: TTSettingsIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     _tt_call(_tt(ctx).set_settings, body.mode, body.term, body.effective, admin["username"])
+    await _publish_timetable(request, ctx)
     return _tt(ctx).admin_view()
 
 
 @router.post("/timetable/sessions")
-async def timetable_add(body: TTSessionIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_add(request: Request, body: TTSessionIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     raw = body.model_dump(exclude={"force"})
-    return _tt_call(_tt(ctx).add_session, raw, admin["username"], body.force)
+    result = _tt_call(_tt(ctx).add_session, raw, admin["username"], body.force)
+    await _publish_timetable(request, ctx)
+    return result
 
 
 @router.put("/timetable/sessions/{sid}")
-async def timetable_update(sid: str, body: TTSessionPatch, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_update(request: Request, sid: str, body: TTSessionPatch, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     raw = body.model_dump(exclude={"force"}, exclude_none=True)
-    return _tt_call(_tt(ctx).update_session, sid, raw, admin["username"], body.force)
+    result = _tt_call(_tt(ctx).update_session, sid, raw, admin["username"], body.force)
+    await _publish_timetable(request, ctx)
+    return result
 
 
 @router.delete("/timetable/sessions/{sid}")
-async def timetable_delete(sid: str, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_delete(request: Request, sid: str, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     _tt_call(_tt(ctx).delete_session, sid, admin["username"])
+    await _publish_timetable(request, ctx)
     return {"ok": True}
 
 
 @router.post("/timetable/sessions/{sid}/restore")
-async def timetable_restore(sid: str, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_restore(request: Request, sid: str, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     _tt_call(_tt(ctx).restore_session, sid, admin["username"])
+    await _publish_timetable(request, ctx)
     return {"ok": True}
 
 
 @router.put("/timetable/courses")
-async def timetable_course(body: TTCourseIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_course(request: Request, body: TTCourseIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     _tt_call(_tt(ctx).set_course, body.group, body.label, body.teacher, body.title, admin["username"])
+    await _publish_timetable(request, ctx)
     return {"ok": True}
 
 
 @router.post("/timetable/undo")
-async def timetable_undo(admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
-    return _tt_call(_tt(ctx).undo, admin["username"])
+async def timetable_undo(request: Request, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+    result = _tt_call(_tt(ctx).undo, admin["username"])
+    await _publish_timetable(request, ctx)
+    return result
 
 
 @router.post("/timetable/reset")
-async def timetable_reset(admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_reset(request: Request, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     _tt(ctx).reset(admin["username"])
+    await _publish_timetable(request, ctx)
+    return {"ok": True}
+
+
+@router.post("/timetable/publish")
+async def timetable_publish(request: Request, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+    await _publish_timetable(request, ctx)
     return {"ok": True}
 
 
@@ -654,7 +740,7 @@ async def timetable_template(admin=Depends(admin_required)):
 
 
 @router.post("/timetable/import")
-async def timetable_import(body: TTImportIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+async def timetable_import(request: Request, body: TTImportIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
     import base64
     import binascii
     from pathlib import Path as _Path
@@ -687,5 +773,6 @@ async def timetable_import(body: TTImportIn, admin=Depends(admin_required), ctx:
     if not rows:
         raise HTTPException(status_code=422, detail="There are no valid rows to import.")
     store.import_rows(rows, admin["username"], body.replace)
+    await _publish_timetable(request, ctx)
     result["applied"] = True
     return result

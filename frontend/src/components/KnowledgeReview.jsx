@@ -18,7 +18,7 @@ export function KnowledgeReview({ request }) {
   async function load() {
     setError('')
     try {
-      const [a, b, c, d] = await Promise.all([request('/knowledge-review'), request(`/knowledge-review/versions?offset=${offset}`), request('/knowledge-review/runs'), request('/feedback')])
+      const [a, b, c, d] = await Promise.all([request('/knowledge-review'), request(`/knowledge-review/versions?offset=${offset}`), request('/knowledge-review/runs'), request('/feedback').catch(() => [])])
       setSummary(a); setVersions(b); setRuns(c); setFeedback(d)
     } catch (e) { setError(e.message) }
   }

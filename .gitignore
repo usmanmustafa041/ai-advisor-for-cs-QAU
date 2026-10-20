@@ -29,3 +29,7 @@ backend/var/
 web/node_modules/
 web/dist/
 backend/.env.advisor
+
+# Local deployment bundles (contain secrets / private data)
+deploy-bundle/
+engine-data.tgz

@@ -32,6 +32,13 @@ from app.schemas.cms import (
 
 router = APIRouter(prefix="/admin/cms", tags=["admin-cms"])
 
+# knowledge_base_audit.action only accepts these values (see init_knowledge_base_schema.sql).
+_AUDIT_ACTIONS = {
+    "create": "INSERT", "bulk_insert": "INSERT",
+    "update": "UPDATE", "upsert_update": "UPDATE", "bulk_upsert_update": "UPDATE",
+    "soft_delete": "DELETE", "reactivate": "RESTORE",
+}
+
 
 def _audit(
     db: Session,
@@ -58,10 +65,10 @@ def _audit(
         """),
         {
             "kb_id": knowledge_base_id,
-            "action": action,
+            "action": _AUDIT_ACTIONS.get(action, action),
             "user_id": user_id,
-            "before": json.dumps(before) if before else None,
-            "after": json.dumps(after) if after else None,
+            "before": json.dumps(before, default=str) if before else None,
+            "after": json.dumps(after, default=str) if after else None,
             "reason": reason,
         },
     )
@@ -785,22 +792,10 @@ def invalidate_cache(
     # Placeholder for cache invalidation logic
     # This will trigger prompt reassembly on next chat request
     
-    categories = payload.categories if payload.categories else ["all"]
-    
-    _audit(
-        db,
-        user["id"],
-        "cache_invalidate",
-        "system",
-        None,
-        {"categories": [c.value for c in categories] if payload.categories else ["all"]},
-        "Cache invalidated by admin"
-    )
-    db.commit()
-    
+    # Not audited: knowledge_base_audit rows must reference a knowledge base entry.
     return {
         "invalidated": True,
-        "categories": [c.value for c in categories] if payload.categories else ["all"],
+        "categories": [c.value for c in payload.categories] if payload.categories else ["all"],
         "timestamp": datetime.utcnow().isoformat(),
     }
 

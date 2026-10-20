@@ -140,7 +140,8 @@ def list_courses(
                    {SOURCE_COLUMNS}
             FROM courses c
             LEFT JOIN source_records s ON s.id = c.source_id
-            WHERE (CAST(:search AS text) IS NULL OR c.code ILIKE :pattern OR c.title ILIKE :pattern)
+            WHERE c.active  -- admin "delete" only deactivates a course
+              AND (CAST(:search AS text) IS NULL OR c.code ILIKE :pattern OR c.title ILIKE :pattern)
             ORDER BY c.code
             LIMIT :limit
         """),

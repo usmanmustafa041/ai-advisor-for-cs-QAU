@@ -47,7 +47,11 @@ export function TimetableView({ auth }) {
   // Load sessions on mount
   useEffect(() => {
     api('/timetable/sessions', {}, auth)
-      .then(setSessions)
+      .then((rows) => {
+        setSessions(rows)
+        const current = rows.find((s) => s.is_current) || rows[0]
+        if (current) setSessionName(current.session_name)
+      })
       .catch(() => setSessions([{ session_name: 'Spring 2026' }]))
   }, [])
 
@@ -60,7 +64,7 @@ export function TimetableView({ auth }) {
   // Load instructors and rooms when needed
   useEffect(() => {
     if (view === 'instructor') {
-      api('/timetable/instructors', {}, auth)
+      api(`/timetable/instructors?session_name=${encodeURIComponent(sessionName)}`, {}, auth)
         .then(setInstructorList)
         .catch(() => {})
     } else if (view === 'room') {
@@ -68,7 +72,7 @@ export function TimetableView({ auth }) {
         .then(setRoomList)
         .catch(() => {})
     }
-  }, [view])
+  }, [view, sessionName])
 
   async function loadSchedule() {
     setLoading(true)
@@ -160,7 +164,7 @@ export function TimetableView({ auth }) {
   }
 
   const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-  const programs = ['BS', 'MPhil', 'PhD', 'MS-DS', 'MS-IST']
+  const programs = ['BS', 'MPhil', 'PhD', 'MS-DS', 'MS-IST', 'Deficiency']
   const shifts = ['Morning', 'Afternoon', 'Evening']
 
   return (

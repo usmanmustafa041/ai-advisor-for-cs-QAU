@@ -16,7 +16,7 @@ All 3 phases successfully implemented:
 ### **Admin Credentials:**
 ```
 Email:    admin@cs.qau.edu.pk
-Password: ChangeMeAdmin123!
+Password: (set during deployment — see docs/DEPLOYMENT.md)
 ```
 
 ### **Steps to Access CMS:**

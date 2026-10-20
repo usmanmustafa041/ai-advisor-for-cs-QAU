@@ -147,5 +147,5 @@ KIND_LABELS = {
     "admissions": "admissions page", "events": "events & academic calendar",
     "research_group": "research group page", "page": "department page",
     "external": "QAU university website",
-    "prerequisites": "department prerequisite list", "department_document": "department document (not on the website)", "computed": "calculated from the department prerequisite list",
+    "prerequisites": "department prerequisite list", "department_document": "department document (not on the website)", "computed": "calculated from the department prerequisite list", "portal_record": "department record maintained by the administrator",
 }

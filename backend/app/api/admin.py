@@ -93,8 +93,9 @@ def _audit(db: Session, user_id: str, action: str, entity_type: str, entity_id: 
         (actor_user_id, action, entity_type, entity_id, before_data, after_data)
         VALUES (:user_id, :action, :entity_type, :entity_id, CAST(:before AS jsonb), CAST(:after AS jsonb))"""),
         {"user_id": user_id, "action": action, "entity_type": entity_type, "entity_id": entity_id,
-         "before": json.dumps(before) if before is not None else None,
-         "after": json.dumps(after) if after is not None else None})
+         # default=str: rows carry Decimal credit hours and date values
+         "before": json.dumps(before, default=str) if before is not None else None,
+         "after": json.dumps(after, default=str) if after is not None else None})
 
 
 def _commit(db: Session, message: str = "Record conflicts with existing data") -> None:
@@ -662,3 +663,142 @@ def report(start: date | None = None, end: date | None = None, _: dict = Depends
     return {"generated_on": date.today().isoformat(), "range": {"start": start, "end": end}, **dict(counts),
             **dict(activity), "average_session_minutes": duration,
             "by_intent": [dict(r) for r in intents], "warning": "No query data exists for the selected range." if counts["total_messages"] == 0 else None}
+
+
+# ---------------------------------------------------------------- timetable publishing
+# The chatbot engine owns the timetable (PDF + admin edits). After every change it publishes the
+# effective timetable here so the students' Timetable page shows the same classes as the chatbot.
+_SECTION_NAMES = {"R": "Regular", "S": "Self Support", "RS": "Regular & Self Support", "Rep": "Repeaters"}
+_MONTHS = {m: i for i, m in enumerate(["january", "february", "march", "april", "may", "june", "july",
+                                       "august", "september", "october", "november", "december"], 1)}
+
+
+class PublishedTimetable(BaseModel):
+    term: str = Field(min_length=1, max_length=60)
+    effective: str | None = None
+    classes: list[dict] = Field(default_factory=list)
+    sessions: list[dict] = Field(default_factory=list)
+
+
+def _effective_date(label: str | None) -> date | None:
+    """'Monday 5th October, 2026' -> 2026-10-05 (None when the label has no recognisable date)."""
+    import re
+    m = re.search(r"(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+),?\s+(\d{4})", label or "")
+    month = _MONTHS.get(m.group(2).lower()) if m else None
+    try:
+        return date(int(m.group(3)), month, int(m.group(1))) if month else None
+    except ValueError:
+        return None
+
+
+@router.put("/timetable/published")
+def publish_timetable(payload: PublishedTimetable, user: dict = Depends(admin_user), db: Session = Depends(get_db)) -> dict:
+    courses = {c.get("key"): {**c, "group": g.get("group", ""), "program": g.get("program", "")}
+               for g in payload.classes for c in g.get("courses", [])}
+    effective = _effective_date(payload.effective) or date.today()
+    db.execute(text("UPDATE academic_sessions SET is_current=false WHERE session_name<>:term"), {"term": payload.term})
+    session_id = db.execute(text("""INSERT INTO academic_sessions(session_name,effective_from,is_current)
+        VALUES (:term,:effective,true) ON CONFLICT(session_name) DO UPDATE SET
+        effective_from=excluded.effective_from,is_current=true,updated_at=now() RETURNING id"""),
+        {"term": payload.term, "effective": effective}).scalar_one()
+    db.execute(text("DELETE FROM course_schedules WHERE academic_session_id=:id"), {"id": session_id})
+    published = 0
+    for slot in payload.sessions:
+        if not slot.get("day") or not slot.get("time") or not (slot.get("code") or slot.get("text")):
+            continue
+        info = courses.get(slot.get("key"), {})
+        try:
+            hour = int(str(slot["time"]).split(":", 1)[0])
+        except ValueError:
+            hour = 8
+        schedule_id = db.execute(text("""INSERT INTO course_schedules
+            (academic_session_id,course_code,course_abbreviation,course_name,program,
+             semester,section_type,day_of_week,time_slot,shift,room,is_active)
+            VALUES (:sid,:code,:abbr,:name,:program,:semester,:section,:day,:time,:shift,:room,true) RETURNING id"""), {
+            "sid": session_id, "code": slot.get("code") or slot.get("key") or "",
+            "abbr": (slot.get("text") or "")[:20], "name": slot.get("title") or info.get("title") or slot.get("text") or "",
+            "program": slot.get("program") or info.get("program") or "ALL", "semester": slot.get("group") or info.get("group") or "",
+            "section": _SECTION_NAMES.get(slot.get("section") or "", slot.get("section") or "Regular"),
+            "day": str(slot["day"]).title(), "time": slot["time"],
+            "shift": "Evening" if hour >= 17 else ("Afternoon" if hour >= 13 else "Morning"),
+            "room": slot.get("room") or "",
+        }).scalar_one()
+        teacher = (slot.get("teacher") or info.get("teacher") or "").strip()
+        if teacher:
+            prefix = teacher.split()[0] if teacher.split()[0].endswith(".") else None
+            instructor_id = db.execute(text("""INSERT INTO instructors(name,title) VALUES (:name,:title)
+                ON CONFLICT(name,department) DO UPDATE SET title=excluded.title RETURNING id"""),
+                {"name": teacher, "title": prefix}).scalar_one()
+            db.execute(text("INSERT INTO course_schedule_instructors(course_schedule_id,instructor_id) VALUES (:s,:i)"),
+                       {"s": schedule_id, "i": instructor_id})
+        published += 1
+    _audit(db, user["id"], "publish", "timetable", payload.term, after={"sessions": published})
+    db.commit()
+    return {"term": payload.term, "published": published}
+
+
+# ---------------------------------------------------------------- chatbot export
+# The chatbot engine has its own index (crawled website + uploaded documents). This export lets it
+# also answer from what admins enter here. Only records backed by a *verified* source are included,
+# so demo/mock data never reaches students as fact.
+_VERIFIED = "s.verification_status = 'verified'"
+
+
+@router.get("/chatbot-export")
+def chatbot_export(_: dict = Depends(admin_user), db: Session = Depends(get_db)) -> dict:
+    docs: list[dict] = []
+    for r in db.execute(text(f"""SELECT r.id::text, r.rule_code, r.category, r.title, r.description,
+            r.effective_from::text AS effective_from, p.code AS program, s.title AS source
+        FROM academic_rules r JOIN source_records s ON s.id=r.source_id LEFT JOIN programs p ON p.id=r.program_id
+        WHERE r.active AND {_VERIFIED} AND (r.effective_to IS NULL OR r.effective_to >= CURRENT_DATE)
+        ORDER BY r.rule_code""")).mappings():
+        scope = f" ({r['program']})" if r["program"] else ""
+        docs.append({"id": f"policy-{r['id']}", "section": "policy", "title": f"{r['title']}{scope}",
+                     "text": f"Rule {r['rule_code']} · {r['category']}{scope}, effective {r['effective_from']}.\n\n"
+                             f"{r['description']}\n\nSource: {r['source']}"})
+
+    fees: dict[tuple, list[dict]] = {}
+    for r in db.execute(text(f"""SELECT COALESCE(p.code, 'All programmes') AS program, f.official_fee_category AS category,
+            f.shift, f.fee_type, f.amount::double precision AS amount, f.currency,
+            f.effective_from::text AS effective_from, s.title AS source
+        FROM fee_structures f JOIN source_records s ON s.id=f.source_id LEFT JOIN programs p ON p.id=f.program_id
+        WHERE {_VERIFIED} AND (f.effective_to IS NULL OR f.effective_to >= CURRENT_DATE)
+        ORDER BY 1, 2, 3, 4""")).mappings():
+        fees.setdefault((r["program"], r["category"], r["effective_from"], r["source"]), []).append(dict(r))
+    for (program, category, effective, source), rows in fees.items():
+        lines = "\n".join(f"| {x['shift']} | {x['fee_type'].replace('_', ' ')} | {x['currency']} {x['amount']:,.0f} |" for x in rows)
+        docs.append({"id": f"fees-{program}-{category}-{effective}", "section": "fees",
+                     "title": f"{program} fees — {category}",
+                     "text": f"{program} fee schedule, {category}, effective {effective}.\n\n"
+                             f"| Shift | Fee | Amount |\n|---|---|---|\n{lines}\n\nSource: {source}"})
+
+    prereqs: dict[str, list[str]] = {}
+    for r in db.execute(text(f"""SELECT c.code, pc.code AS needs, cp.relation_type, cp.minimum_grade, cs.name AS curriculum
+        FROM course_prerequisites cp JOIN courses c ON c.id=cp.course_id JOIN courses pc ON pc.id=cp.prerequisite_course_id
+        JOIN curriculum_schemes cs ON cs.id=cp.curriculum_id JOIN source_records s ON s.id=cp.source_id
+        WHERE {_VERIFIED} ORDER BY c.code, pc.code""")).mappings():
+        grade = f" (minimum grade {r['minimum_grade']})" if r["minimum_grade"] else ""
+        prereqs.setdefault(r["code"], []).append(f"{r['needs']} as a {r['relation_type']}{grade}, {r['curriculum']}")
+    for r in db.execute(text(f"""SELECT c.code, c.title, c.description, c.theory_credit_hours::double precision AS theory,
+            c.lab_credit_hours::double precision AS lab, s.title AS source
+        FROM courses c LEFT JOIN source_records s ON s.id=c.source_id
+        WHERE c.active AND (c.source_id IS NULL OR {_VERIFIED}) ORDER BY c.code""")).mappings():
+        needs = prereqs.get(r["code"])
+        body = (f"{r['code']} {r['title']}: {r['theory']:g} theory + {r['lab']:g} lab credit hours."
+                + (f"\n\n{r['description']}" if r["description"] else "")
+                + (f"\n\nPrerequisites of {r['code']}: " + "; ".join(needs) + "." if needs else f"\n\n{r['code']} has no recorded prerequisite.")
+                + f"\n\nSource: {r['source'] or 'entered by the department administrator'}")
+        docs.append({"id": f"course-{r['code']}", "section": "course", "title": f"{r['code']} {r['title']}", "text": body})
+
+    for r in db.execute(text(f"""SELECT kd.id::text, kd.title, kd.category, s.title AS source,
+            string_agg(dc.content, E'\n\n' ORDER BY dc.chunk_index) AS content
+        FROM knowledge_documents kd JOIN source_records s ON s.id=kd.source_id
+        JOIN document_chunks dc ON dc.document_id=kd.id
+        WHERE kd.processing_status='ready' AND {_VERIFIED} GROUP BY kd.id, s.title ORDER BY kd.title""")).mappings():
+        docs.append({"id": f"knowledge-{r['id']}", "section": "knowledge", "title": r["title"],
+                     "text": f"{r['content']}\n\nSource: {r['source']}"})
+
+    for r in db.execute(text("""SELECT id::text, category, title, content_markdown FROM knowledge_base
+        WHERE is_active ORDER BY priority, title""")).mappings():
+        docs.append({"id": f"cms-{r['id']}", "section": "cms", "title": r["title"], "text": r["content_markdown"]})
+    return {"generated_at": date.today().isoformat(), "documents": docs}

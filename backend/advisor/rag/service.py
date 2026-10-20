@@ -82,6 +82,36 @@ NOT_FOUND = {
 }
 
 
+_FEE_FILLER = {"fee", "fees", "charge", "charges", "the", "and", "for", "per"}
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]+", text.lower()) if len(w) > 2 and w not in _FEE_FILLER}
+
+
+def asks_admin_only_fee(question: str, bundle) -> bool:
+    """True when the question names a fee that only a portal admin record lists.
+
+    The official fee table (crawled from the university website) answers its own fee items; a fee
+    an administrator added that the table does not have must come from the admin's record instead."""
+    if bundle is None or getattr(bundle, "fees", None) is None:
+        return False
+    asked = _words(question)
+    official = [_words(r["head"]) for page in bundle.fees.data.get("pages", [])
+                for g in page.get("groups", []) for r in g.get("rows", [])]
+    for c in bundle.chunks:
+        if not c["url"].startswith("doc://portal/fees/"):
+            continue
+        for line in c["text"].splitlines():
+            cells = [x.strip() for x in line.strip().strip("|").split("|")]
+            if len(cells) != 3 or cells[1] in ("Fee", "---"):
+                continue
+            name = _words(cells[1])
+            if name and name <= asked and not any(name <= head for head in official):
+                return True
+    return False
+
+
 def _norm_question(q: str) -> str:
     return re.sub(r"[^\w؀-ۿ]+", " ", q.lower()).strip()
 
@@ -330,6 +360,8 @@ class AdvisorService:
         for name, source in (("timetable", tt), ("fees", getattr(self.kb.bundle, "fees", None) if self.kb.bundle else None)):
             if source is None:
                 continue
+            if name == "fees" and asks_admin_only_fee(question, self.kb.bundle):
+                continue  # answered from the admin's fee record by retrieval below
             try:
                 found = source.answer(question, lang, history)
             except Exception:

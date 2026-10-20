@@ -351,9 +351,9 @@ function Account({ call, signOut, usesPortalSession, onPortalPasswordChange, onP
   )
 }
 
-export function AdvisorAdmin({ auth, onPortalPasswordChange, onPortalLogout }) {
+export function AdvisorAdmin({ auth, onPortalPasswordChange, onPortalLogout, initialTab = 'overview' }) {
   const { call, signIn, signOut, needsLogin, token, usesPortalSession } = useAdmin(auth)
-  const [tab, setTab] = useState('overview')
+  const [tab, setTab] = useState(initialTab)
   const [checked, setChecked] = useState(false)
   useEffect(() => { call('GET', '/admin/me').catch(() => {}).finally(() => setChecked(true)) }, [call])
   if (!checked) return <div className="advisor-admin"><p className="muted">Connecting to the chatbot engine…</p></div>

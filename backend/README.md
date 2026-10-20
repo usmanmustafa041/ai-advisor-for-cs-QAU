@@ -65,6 +65,6 @@ the root `docker-compose.yml`.
 The API also implements registration/login, authenticated chat persistence,
 query history, public policies/deadlines/exams, and administrator management for
 courses, fees, timetables, policies, user accounts, query logs, and date-ranged
-reports. A fresh development database seeds `admin@cs.qau.edu.pk` with bootstrap
-password `ChangeMeAdmin123!`; change it immediately and never keep it in a
-deployed environment.
+reports. A fresh database seeds the `admin@cs.qau.edu.pk` account with a publicly
+known bootstrap password. Replace it right after the first start with
+`python scripts/set_admin_password.py` (see [docs/DEPLOYMENT.md](../docs/DEPLOYMENT.md)).
