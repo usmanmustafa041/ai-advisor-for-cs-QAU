@@ -22,8 +22,8 @@ services:
       - ./database/completeness_seed.sql:/docker-entrypoint-initdb.d/011-completeness-seed.sql:ro
       - ./database/rag_upgrade.sql:/docker-entrypoint-initdb.d/012-rag-upgrade.sql:ro
       - ./backend/scripts/init_knowledge_base_schema.sql:/docker-entrypoint-initdb.d/013-cms.sql:ro
-      - ./backend/scripts/init_timetable_schema.sql:/docker-entrypoint-initdb.d/014-timetable.sql:ro
-      - ./backend/scripts/seed_spring_2026_complete.sql:/docker-entrypoint-initdb.d/014a-timetable-spring-2026.sql:ro
+      - ./backend/scripts/init_timetable_schema.sql:/docker-entrypoint-initdb.d/0140-timetable.sql:ro
+      - ./backend/scripts/seed_spring_2026_complete.sql:/docker-entrypoint-initdb.d/0141-timetable-spring-2026.sql:ro
       - ./database/pipeline_feedback.sql:/docker-entrypoint-initdb.d/015-pipeline-feedback.sql:ro
       - ./database/pipeline_source_compat.sql:/docker-entrypoint-initdb.d/016-source-compat.sql:ro
     healthcheck:
