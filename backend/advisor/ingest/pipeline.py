@@ -7,8 +7,10 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from advisor.ingest.chunker import chunk_document
+from advisor.ingest.crawler import DOCUMENT_EXT
 from advisor.ingest.derived import derive_documents
 from advisor.ingest.fees import fee_documents, parse_fee_page
 from advisor.ingest.model import Chunk, Document
@@ -50,7 +52,8 @@ def _prefer(a: PageRecord, b: PageRecord) -> PageRecord:
     def score(r: PageRecord):
         u = r.url
         numeric = bool(re.search(r"/faculty/\d+$", u))
-        return (numeric, ".php" in u, len(u))
+        # an old http:// copy of a PDF was recorded as text/html; keep the https record with the real type
+        return (numeric, ".php" in u, not u.startswith("https://"), len(u))
 
     return a if score(a) <= score(b) else b
 
@@ -86,7 +89,15 @@ def collect_documents(
         report.pages += 1
         try:
             raw_path = store.object_path(rec.sha256, rec.ext or "")
-            if rec.ext == ".html":
+            ext = rec.ext
+            with raw_path.open("rb") as fh:
+                if fh.read(5) == b"%PDF-":  # trust the bytes: servers mislabel PDFs as text/html
+                    ext = ".pdf"
+            if ext == ".html" and urlsplit(url).path.lower().endswith(DOCUMENT_EXT):
+                # an HTML wrapper around a document's bytes (old http:// copies); the document itself is indexed
+                report.skipped.append((url, "HTML copy of a document"))
+                continue
+            if ext == ".html":
                 html = raw_path.read_bytes().decode("utf-8", "replace")
                 fee_page = parse_fee_page(url, html, rec.fetched_at)
                 if fee_page:  # fee tables are kept apart (CS / other programmes / foreign) instead of read as running text
@@ -94,7 +105,7 @@ def collect_documents(
                     docs += fee_documents(fee_page)
                 else:
                     docs += extract_web(url, html, rec.fetched_at)
-            elif rec.ext == ".pdf":
+            elif ext == ".pdf":
                 docs += extract_pdf(Path(raw_path), url, rec.fetched_at)
             else:
                 report.skipped.append((url, f"unsupported type {rec.content_type}"))
@@ -188,12 +199,22 @@ def _norm(text: str) -> str:
     return re.sub(r"\W+", " ", text).strip().lower()
 
 
+def looks_binary(text: str) -> bool:
+    """Raw PDF/image bytes decoded as text: replacement characters or PDF syntax, not prose."""
+    if not text:
+        return False
+    return text.count("�") > max(5, len(text) // 50) or bool(re.search(r"\bstartxref\b|%%EOF|\bendobj\b", text))
+
+
 def build_chunks(docs: list[Document], report: IngestReport | None = None) -> list[Chunk]:
     report = report or IngestReport()
     chunks: list[Chunk] = []
     seen: dict[str, Chunk] = {}
     for doc in sorted(docs, key=lambda d: (-d.priority, d.url, d.title)):
         for ch in chunk_document(doc):
+            if looks_binary(ch.text):
+                report.skipped.append((ch.url, "binary content, not text"))
+                continue
             key = hashlib.sha1(_norm(ch.text).encode()).hexdigest()
             if key in seen:
                 continue  # identical text already indexed from a higher-priority source
