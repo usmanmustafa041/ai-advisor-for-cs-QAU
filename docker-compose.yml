@@ -149,6 +149,29 @@ services:
       timeout: 5s
       retries: 10
 
+  # Same local model on a server without a GPU (slow: use a small model such as qwen2.5:3b).
+  #   docker compose --profile local-llm-cpu up -d ollama-cpu
+  ollama-cpu:
+    image: ollama/ollama:0.35.1
+    profiles: ["local-llm-cpu"]
+    restart: unless-stopped
+    volumes:
+      - qau_ollama_models:/root/.ollama
+    environment:
+      OLLAMA_NO_CLOUD: "true"
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+      OLLAMA_KEEP_ALIVE: "30m"
+    mem_limit: ${OLLAMA_MEM_LIMIT:-4g}
+    networks:
+      default:
+        aliases: [ollama]  # the engine's default URL http://ollama:11434 reaches it unchanged
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
 volumes:
   qau_advisor_pgdata:
   qau_advisor_engine_data:
