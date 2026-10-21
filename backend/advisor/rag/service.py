@@ -148,8 +148,9 @@ class AnswerCache:
 
 class _Turn:
     """One question/answer exchange. Guest ("ephemeral") turns are never written to the database:
-    the browser supplies the recent history and nothing is kept, except that a question the
-    assistant could not answer is logged (without any identity) so the website can be improved."""
+    the browser supplies the recent history and no conversation is kept. The question alone is logged,
+    without any identity, so the department can see what is asked; with ``chat.log_guest_questions``
+    off, only questions the assistant could not answer are."""
 
     def __init__(self, svc: AdvisorService, cid: str | None, owner: str | None, ephemeral: bool):
         self.svc, self.cid, self.owner, self.ephemeral = svc, cid, owner, ephemeral
@@ -160,7 +161,8 @@ class _Turn:
         return self.svc._store(self.cid, role, content, meta)
 
     def log(self, **kw) -> None:
-        if self.ephemeral and kw.get("outcome") not in ("abstained", "error", "degraded"):
+        if (self.ephemeral and kw.get("outcome") not in ("abstained", "error", "degraded")
+                and not self.svc.rt.get("chat.log_guest_questions")):
             kw["question"] = "[guest conversation - not stored]"
         kw.setdefault("conversation_id", self.cid)
         kw.setdefault("owner_id", self.owner)

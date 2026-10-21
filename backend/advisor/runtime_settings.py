@@ -75,6 +75,9 @@ SPECS: dict[str, Spec] = {
         Spec("chat.log_questions", "bool", True, "Keep a log of questions",
              "Used for the 'unanswered questions' report. Questions are kept for the retention period.",
              group="operations"),
+        Spec("chat.log_guest_questions", "bool", True, "Log every guest question",
+             "Guests are anonymous: only the question text is kept, never a name or the answer. "
+             "Off = keep only the guest questions the assistant could not answer.", group="operations"),
     ]
 }
 

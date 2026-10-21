@@ -94,7 +94,7 @@ def test_my_conversations_requires_a_verified_session(env):
     assert client.get("/api/v1/me/conversations", headers={"Authorization": "Bearer forged-token-000000"}).status_code == 401
 
 
-def test_guest_conversations_are_not_stored_at_all(env):
+def test_guest_conversations_are_not_stored_only_the_question_is_logged(env):
     client, ctx, provider = env
     history = [{"role": "user", "content": "Tell me about CSC-211"}, {"role": "assistant", "content": "It is Data Structures."}]
     out = chat(client, "What are its prerequisites?", ephemeral=True, history=history)
@@ -103,8 +103,14 @@ def test_guest_conversations_are_not_stored_at_all(env):
     assert ctx.db.scalar("SELECT COUNT(*) FROM conversations", default=0) == 0
     roles = [m.role for m in provider.prompts[-1]]
     assert roles.count("assistant") >= 1  # the browser-supplied history reached the model
+    row = ctx.db.one("SELECT question, owner_id, conversation_id FROM query_log ORDER BY id DESC")
+    assert row["question"] == "What are its prerequisites?"  # the question alone, without identity
+    assert row["owner_id"] is None and row["conversation_id"] is None
+    ctx.runtime.set("chat.log_guest_questions", False, "tester")
+    ctx.service.cache.clear()
+    chat(client, "What are its prerequisites?", ephemeral=True, history=history)
     row = ctx.db.one("SELECT question FROM query_log ORDER BY id DESC")
-    assert "not stored" in row["question"]  # not even the text of an answered question is kept
+    assert "not stored" in row["question"]  # off: an answered guest question is not kept
 
 
 def test_guest_question_that_cannot_be_answered_is_logged_without_identity(env):

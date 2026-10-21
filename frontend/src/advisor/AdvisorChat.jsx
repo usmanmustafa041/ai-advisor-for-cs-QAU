@@ -6,7 +6,7 @@ import { AdvisorError, advisorRequest, streamAdvisorChat } from './advisorApi'
 import './advisor-chat.css'
 
 // Same look, same layout and same class names as the portal's original chat panel; only the engine
-// behind it is new. Guests are "ephemeral": the browser keeps the conversation and nothing is stored.
+// behind it is new. Guests are "ephemeral": the browser keeps the conversation; only the anonymous question is logged.
 
 const WELCOME = 'Assalam-o-Alaikum. Ask me about courses, prerequisites, fees, schedules, exams, policies, or research requirements.'
 const OUTCOME_LABEL = {
@@ -211,7 +211,7 @@ export function AdvisorChat({ auth, suggestions = [] }) {
           >
             + New
           </button>
-          <span>{guest ? 'Guest conversation · not saved' : 'Private authenticated conversation · history enabled'}</span>
+          <span>{guest ? 'Guest conversation · no history' : 'Private authenticated conversation · history enabled'}</span>
         </div>
         <button className="language-toggle" onClick={() => setLanguage(urdu ? 'en' : 'ur')}>{urdu ? 'English' : 'اردو'}</button>
       </div>
@@ -255,7 +255,7 @@ export function AdvisorChat({ auth, suggestions = [] }) {
           <input dir={urdu ? 'rtl' : 'ltr'} lang={urdu ? 'ur' : 'en'} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent?.isComposing && send()} placeholder={urdu ? 'اپنا تعلیمی سوال پوچھیں…' : 'Ask an academic question…'} maxLength={1200} />
           <button onClick={() => send()} disabled={sending} aria-label="Send query">↑</button>
         </div>
-        <small className="privacy">{guest ? 'This guest conversation is not stored. Sign in to enable History. ' : ''}Answers come from the department's published pages and documents, with sources. Please confirm important decisions with the department office.</small>
+        <small className="privacy">{guest ? 'Guest chats are not saved to a history (sign in to enable History); questions are kept anonymously to improve the assistant. ' : ''}Answers come from the department's published pages and documents, with sources. Please confirm important decisions with the department office.</small>
       </div>
     </div>
     <aside className="suggestions"><p className="eyebrow">QUICK START</p><h3>Popular questions</h3>{suggestions.map(([label, q]) => <button key={label} onClick={() => send(q)}><span>{label}</span><b>›</b><small>{q}</small></button>)}</aside>

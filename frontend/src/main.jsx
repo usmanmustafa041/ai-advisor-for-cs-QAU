@@ -422,7 +422,7 @@ function Chat({ auth }) {
           >
             + New
           </button>
-          <span>{guest ? 'Guest conversation · not saved' : 'Private authenticated conversation · history enabled'}</span>
+          <span>{guest ? 'Guest conversation · no history' : 'Private authenticated conversation · history enabled'}</span>
         </div>
         <button className="language-toggle" onClick={() => setLanguage(urdu ? 'en' : 'ur')}>{urdu ? 'English' : 'اردو'}</button>
       </div>
@@ -458,7 +458,7 @@ function Chat({ auth }) {
           <input dir={urdu ? 'rtl' : 'ltr'} lang={urdu ? 'ur' : 'en'} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send()} placeholder={urdu ? 'اپنا تعلیمی سوال پوچھیں…' : 'Ask an academic question…'} />
           <button onClick={() => send()} disabled={sending} aria-label="Send query">↑</button>
         </div>
-        <small className="privacy">{guest ? 'This guest conversation is not stored. Sign in to enable History. ' : ''}Answers use available records and clearly identify demo or unverified information.</small>
+        <small className="privacy">{guest ? 'Guest chats are not saved to a history (sign in to enable History); questions are kept anonymously to improve the assistant. ' : ''}Answers use available records and clearly identify demo or unverified information.</small>
       </div>
     </div>
     <aside className="suggestions"><p className="eyebrow">QUICK START</p><h3>Popular questions</h3>{suggestions.map(([label, q]) => <button key={label} onClick={() => send(q)}><span>{label}</span><b>›</b><small>{q}</small></button>)}</aside>

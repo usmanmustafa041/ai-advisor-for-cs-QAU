@@ -24,7 +24,7 @@ describe('academic advisor interface', () => {
   it('allows guest advising without exposing saved history', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: /Continue without signing in/i }))
-    expect(screen.getByText(/Guest conversation · not saved/i)).toBeInTheDocument()
+    expect(screen.getByText(/Guest conversation · no history/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument()
     expect(screen.getByText(/Sign in to save and revisit/i)).toBeInTheDocument()
   })

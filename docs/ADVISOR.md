@@ -82,8 +82,9 @@ docker compose exec advisor python -m advisor.cli refresh
 docker compose restart advisor
 ```
 
-* **Guests**: the browser sends its own recent turns and `ephemeral: true`; the server stores nothing
-  (a question is logged only if it was abstained, errored or degraded, so gaps can be fixed).
+* **Guests**: the browser sends its own recent turns and `ephemeral: true`; the server keeps no
+  conversation or answer. The question text is logged without any identity so admins can see what is
+  asked; with *Log every guest question* off, only abstained, errored or degraded questions are.
 * **Students**: conversations are owned by the portal user id; one student can never read or delete
   another's (404), and feedback is checked the same way. History uses `/me/history`.
 * **Administrators**: a portal admin is accepted by the engine's admin API through the same check, so the
