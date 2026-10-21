@@ -196,6 +196,7 @@ async def test_providers(admin=Depends(admin_required), ctx: Context = Depends(g
                 {
                     "provider": provider.name, "model": provider.model, "ok": bool(text.strip()),
                     "ms": int((time.monotonic() - started) * 1000), "reply": text.strip()[:60],
+                    **({} if text.strip() else {"error": "the model replied with empty text", "kind": "empty"}),
                 }
             )
         except (ProviderError, TimeoutError) as exc:

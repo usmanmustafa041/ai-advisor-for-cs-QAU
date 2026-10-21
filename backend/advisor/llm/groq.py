@@ -40,6 +40,14 @@ class GroqProvider:
         }
         if params.json_mode:
             body["response_format"] = {"type": "json_object"}
+        name = self.model.lower()
+        # Reasoning models spend completion tokens on hidden reasoning first; keep it short and leave room for the answer.
+        if "gpt-oss" in name:
+            body["reasoning_effort"] = "low"
+            body["include_reasoning"] = False
+            body["max_completion_tokens"] = params.max_tokens + 1024
+        elif "qwen3" in name:
+            body["reasoning_effort"] = "none"
         return body
 
     def _raise_for(self, status: int, payload: str) -> None:

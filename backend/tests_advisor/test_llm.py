@@ -173,3 +173,11 @@ def test_groq_error_classification_never_leaks_key(monkeypatch, status, kind):
     with pytest.raises(ProviderError) as exc:
         collect(GroqProvider("gsk_SECRET", "m"))
     assert exc.value.kind == kind and "gsk_SECRET" not in str(exc.value)
+
+
+def test_groq_reasoning_models_get_low_effort_and_answer_room():
+    from advisor.llm.groq import GroqProvider
+
+    body = GroqProvider("k", "openai/gpt-oss-120b")._body(MSGS, GenParams(max_tokens=20))
+    assert body["reasoning_effort"] == "low" and body["max_completion_tokens"] > 20
+    assert "reasoning_effort" not in GroqProvider("k", "llama-3.1-8b-instant")._body(MSGS, P)
