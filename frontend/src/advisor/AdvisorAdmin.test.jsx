@@ -39,4 +39,14 @@ describe('AdvisorAdmin account', () => {
     expect(onPortalLogout).toHaveBeenCalledOnce()
     expect(advisorRequest).not.toHaveBeenCalledWith('/admin/password', expect.anything(), expect.anything())
   })
+
+  it('hides tabs the portal already offers and can show a single tab alone', async () => {
+    render(<AdvisorAdmin auth={auth} hideTabs={['timetable']} />)
+    await screen.findByRole('tab', { name: 'Overview' })
+    expect(screen.queryByRole('tab', { name: 'Timetable' })).toBeNull()
+    cleanup()
+    render(<AdvisorAdmin auth={auth} only="account" />)
+    await screen.findByRole('button', { name: 'Change password' })
+    expect(screen.queryByRole('tablist')).toBeNull()
+  })
 })

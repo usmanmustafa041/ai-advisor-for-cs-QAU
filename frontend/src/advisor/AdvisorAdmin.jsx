@@ -354,16 +354,17 @@ function Account({ call, signOut, usesPortalSession, onPortalPasswordChange, onP
   )
 }
 
-export function AdvisorAdmin({ auth, onPortalPasswordChange, onPortalLogout, initialTab = 'overview' }) {
+// only: show a single tab without the tab bar; hideTabs: tabs the host page already offers elsewhere
+export function AdvisorAdmin({ auth, onPortalPasswordChange, onPortalLogout, initialTab = 'overview', only = null, hideTabs = [] }) {
   const { call, signIn, signOut, needsLogin, token, usesPortalSession } = useAdmin(auth)
-  const [tab, setTab] = useState(initialTab)
+  const [tab, setTab] = useState(only || initialTab)
   const [checked, setChecked] = useState(false)
   useEffect(() => { call('GET', '/admin/me').catch(() => {}).finally(() => setChecked(true)) }, [call])
   if (!checked) return <div className="advisor-admin"><p className="muted">Connecting to the chatbot engine…</p></div>
   if (needsLogin || !token) return <div className="advisor-admin"><Login onSignedIn={signIn} /></div>
   return (
     <div className="advisor-admin">
-      <nav className="tabs" role="tablist">{TABS.map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{label}</button>)}</nav>
+      {!only && <nav className="tabs" role="tablist">{TABS.filter(([id]) => !hideTabs.includes(id)).map(([id, label]) => <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>{label}</button>)}</nav>}
       <section className="panel">
         {tab === 'overview' && <Overview call={call} />}
         {tab === 'ai' && <Providers call={call} />}
