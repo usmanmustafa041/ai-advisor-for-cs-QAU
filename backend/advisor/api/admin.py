@@ -17,6 +17,7 @@ from advisor.context import Context
 from advisor.knowledge_build import refresh_knowledge
 from advisor.llm.base import GenParams, Message, ProviderError
 from advisor.llm.gemini import GeminiProvider
+from advisor.llm.groq import GroqProvider
 from advisor.llm.ollama import OllamaProvider
 from advisor.retrieval.bundle import list_builds, load_bundle, set_current
 from advisor.runtime_settings import SPECS
@@ -142,7 +143,7 @@ async def put_settings(body: SettingsIn, admin=Depends(admin_required), ctx: Con
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     # A new key/model deserves an immediate try, and old answers may no longer apply.
-    for provider in ("gemini", "ollama"):
+    for provider in ("gemini", "groq", "ollama"):
         if any(k.startswith(provider) or k == "llm.primary" for k in changed):
             ctx.router.health.pop(provider, None)
     ctx.service.cache.clear()
@@ -168,6 +169,17 @@ async def verify_gemini(body: VerifyGeminiIn, admin=Depends(admin_required), ctx
         "ok": status.healthy, "detail": status.detail, "model": model,
         "models": [m for m in status.models if "gemini" in m],
     }
+
+
+@router.post("/providers/groq/verify")
+async def verify_groq(body: VerifyGeminiIn, admin=Depends(admin_required), ctx: Context = Depends(get_ctx)):
+    """Check a Groq key (typed in the form, or the saved one) before saving it."""
+    key = (body.api_key or "").strip() or ctx.runtime.get("groq.api_key")
+    if not key:
+        raise HTTPException(status_code=422, detail="Enter a Groq API key first")
+    model = (body.model or "").strip() or ctx.runtime.get("groq.model")
+    status = await GroqProvider(key, model).status()
+    return {"ok": status.healthy, "detail": status.detail, "model": model, "models": status.models}
 
 
 @router.post("/providers/test")

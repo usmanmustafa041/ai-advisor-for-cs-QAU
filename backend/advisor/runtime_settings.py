@@ -36,8 +36,8 @@ SPECS: dict[str, Spec] = {
     s.key: s
     for s in [
         Spec("llm.primary", "choice", "auto", "Preferred AI provider",
-             "auto = Gemini when an API key is set, otherwise the local Ollama model.",
-             choices=("auto", "gemini", "ollama"), group="ai"),
+             "auto = Gemini when an API key is set, then Groq, then the local Ollama model.",
+             choices=("auto", "gemini", "groq", "ollama"), group="ai"),
         Spec("gemini.api_key", "str", "", "Gemini API key",
              "Paste a key from Google AI Studio. Stored encrypted; never shown again.",
              secret=True, group="ai"),
@@ -47,6 +47,12 @@ SPECS: dict[str, Spec] = {
         Spec("gemini.thinking_budget", "int", 0, "Gemini thinking budget (tokens)",
              "0 disables hidden reasoning for fast replies; raise for harder questions. "
              "Ignored by models that cannot disable thinking.", group="ai", min=0, max=24576),
+        Spec("groq.api_key", "str", "", "Groq API key",
+             "Fallback when Gemini runs out of quota or does not reply. Key from console.groq.com. "
+             "Stored encrypted; never shown again.", secret=True, group="ai"),
+        Spec("groq.model", "str", "llama-3.3-70b-versatile", "Groq model",
+             "Any Groq chat model (use 'Check key' to list them).", group="ai"),
+        Spec("groq.enabled", "bool", True, "Use Groq when a key is configured", group="ai"),
         Spec("ollama.base_url", "str", "http://127.0.0.1:11434", "Ollama URL", group="ai"),
         Spec("ollama.model", "str", "qwen3:8b", "Ollama model",
              "Local fallback model. Must already be pulled (ollama pull <name>).", group="ai"),
@@ -80,6 +86,8 @@ class RuntimeSettings:
         self._bootstrap = {
             "gemini.api_key": defaults.gemini_api_key,
             "gemini.model": defaults.gemini_model,
+            "groq.api_key": defaults.groq_api_key,
+            "groq.model": defaults.groq_model,
             "ollama.base_url": defaults.ollama_base_url,
             "ollama.model": defaults.ollama_model,
         }

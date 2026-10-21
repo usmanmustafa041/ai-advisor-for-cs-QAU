@@ -35,14 +35,16 @@ cs.qau.edu.pk (pages + PDFs)                                         students (R
 | **Freshness honesty** | Each source carries its own note ("2012 University Calendar", "scanned notice read with OCR"). OCR'd text is down-ranked below clean pages. |
 | **Privacy** | Merit lists naming applicants are never indexed. Conversations/logs are deleted after `ADVISOR_HISTORY_RETENTION_DAYS` (90). |
 
-## AI providers (Gemini → Ollama → extractive)
+## AI providers (Gemini → Groq → Ollama → extractive)
 
-Set the Gemini key in **Admin → AI providers** (stored encrypted; never shown again; *Check key*
+Set the Gemini (and optionally Groq) key in **Admin → AI providers** (stored encrypted; never shown again; *Check key*
 verifies it before saving and lists the models it can use). Order per request:
 
 1. **Gemini** if a key is saved and enabled (or forced via *Preferred provider*).
-2. **Ollama** (local, default `qwen3:8b`) if Gemini is missing, rate-limited, down or blocked.
-3. **Extractive fallback** – if neither works the student still gets the best passages verbatim.
+2. **Groq** (hosted, default `llama-3.3-70b-versatile`) if a Groq key is saved and Gemini is missing,
+   rate-limited, down or blocked.
+3. **Ollama** (local, default `qwen3:8b`) if neither hosted provider answers.
+4. **Extractive fallback** – if none works the student still gets the best passages verbatim.
 
 Failures before the first token fail over silently; a failure mid-answer restarts the answer on the
 next provider. A circuit breaker pauses a failing provider (configuration errors for longer). The

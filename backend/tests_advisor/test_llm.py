@@ -143,3 +143,33 @@ def test_think_filter_handles_split_tags():
     f = _ThinkFilter()
     out = "".join(f.feed(p) for p in ["a<th", "ink>zzz</th", "ink>b"]) + f.flush()
     assert out == "ab"
+
+
+def test_groq_streams_openai_sse_with_bearer_key_and_hides_think(monkeypatch):
+    from advisor.llm import groq as groq_mod
+    from advisor.llm.groq import GroqProvider
+
+    seen = {}
+
+    def handler(req):
+        seen["url"], seen["auth"], seen["body"] = str(req.url), req.headers.get("authorization"), json.loads(req.content)
+        return httpx.Response(200, content=sse(
+            {"choices": [{"delta": {"content": "<think>plan</think>Hel"}}]},
+            {"choices": [{"delta": {"content": "lo"}}]},
+        ) + b"data: [DONE]\n\n")
+
+    patch_client(monkeypatch, groq_mod, handler)
+    assert collect(GroqProvider("gsk_SECRET", "llama-3.3-70b-versatile")) == "Hello"
+    assert seen["url"].endswith("/openai/v1/chat/completions") and seen["auth"] == "Bearer gsk_SECRET"
+    assert [m["role"] for m in seen["body"]["messages"]] == ["system", "user", "assistant", "user"]
+
+
+@pytest.mark.parametrize("status,kind", [(401, "auth"), (429, "quota"), (404, "model_missing"), (503, "unavailable")])
+def test_groq_error_classification_never_leaks_key(monkeypatch, status, kind):
+    from advisor.llm import groq as groq_mod
+    from advisor.llm.groq import GroqProvider
+
+    patch_client(monkeypatch, groq_mod, lambda r: httpx.Response(status, json={"error": {"message": "bad gsk_SECRET"}}))
+    with pytest.raises(ProviderError) as exc:
+        collect(GroqProvider("gsk_SECRET", "m"))
+    assert exc.value.kind == kind and "gsk_SECRET" not in str(exc.value)

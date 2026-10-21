@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     # Bootstrap defaults; the admin console overrides these at runtime.
     gemini_api_key: str = ""
     gemini_model: str = "gemini-3.5-flash"
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
     ollama_base_url: str = "http://127.0.0.1:11434"
     ollama_model: str = "qwen3:8b"
     ollama_num_ctx: int = 4096

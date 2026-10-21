@@ -97,6 +97,8 @@ services:
       ADVISOR_ANSWER_TIMEOUT_SECONDS: ${ADVISOR_ANSWER_TIMEOUT_SECONDS:-240}
       ADVISOR_GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       ADVISOR_GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      ADVISOR_GROQ_API_KEY: ${GROQ_API_KEY:-}
+      ADVISOR_GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
     volumes:
       - qau_advisor_engine_data:/data
       - ./academic-data:/academic-data:ro

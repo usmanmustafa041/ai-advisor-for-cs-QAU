@@ -125,17 +125,20 @@ function SettingsForm({ call, group, title, children }) {
   )
 }
 
+const PROVIDER_TITLES = { gemini: 'Google Gemini', groq: 'Groq (fallback)', ollama: 'Ollama (local)' }
+
 function Providers({ call }) {
   const [list, setList] = useState([])
   const [verify, setVerify] = useState(null)
   const [test, setTest] = useState(null)
   const [busy, setBusy] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
+  const [keyFor, setKeyFor] = useState('gemini')
   const refresh = useCallback(() => call('GET', '/admin/providers').then((r) => setList(r.providers)).catch(() => {}), [call])
   useEffect(() => { refresh() }, [refresh])
   const doVerify = async () => {
     setBusy('verify'); setVerify(null)
-    try { setVerify(await call('POST', '/admin/providers/gemini/verify', { api_key: keyDraft || null })) } catch (e) { setVerify({ ok: false, detail: e.message }) } finally { setBusy('') }
+    try { setVerify(await call('POST', `/admin/providers/${keyFor}/verify`, { api_key: keyDraft || null })) } catch (e) { setVerify({ ok: false, detail: e.message }) } finally { setBusy('') }
   }
   const doTest = async () => { setBusy('test'); setTest(null); try { setTest(await call('POST', '/admin/providers/test')) } finally { setBusy(''); refresh() } }
   return (
@@ -143,7 +146,7 @@ function Providers({ call }) {
       <div className="grid2">
         {list.map((p) => (
           <div key={p.name} className={`card prov ${p.healthy ? 'ok' : 'bad'}`}>
-            <h3>{p.name === 'gemini' ? 'Google Gemini' : 'Ollama (local)'} <span className={`pill ${p.healthy ? 'ok' : 'bad'}`}>{p.healthy ? 'ready' : p.configured ? 'problem' : 'not set up'}</span></h3>
+            <h3>{PROVIDER_TITLES[p.name] || p.name} <span className={`pill ${p.healthy ? 'ok' : 'bad'}`}>{p.healthy ? 'ready' : p.configured ? 'problem' : 'not set up'}</span></h3>
             <p className="muted">Model: <b>{p.model}</b></p>
             <p>{p.detail}</p>
             {p.stats?.ok !== undefined && <p className="muted">{p.stats.ok} ok · {p.stats.failed} failed{p.stats.paused ? ' · paused after errors' : ''}{p.stats.p50_ms ? ` · median ${(p.stats.p50_ms / 1000).toFixed(1)}s` : ''}</p>}
@@ -152,9 +155,9 @@ function Providers({ call }) {
         ))}
       </div>
       <div className="card">
-        <h3>Check a Gemini key</h3>
+        <h3>Check an API key</h3>
         <p className="muted">Paste a key to test it before saving, or leave blank to test the saved key.</p>
-        <div className="row"><input type="password" autoComplete="off" placeholder="AIza…" value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} /><button onClick={doVerify} disabled={busy === 'verify'}>{busy === 'verify' ? 'Checking…' : 'Check key'}</button></div>
+        <div className="row"><select value={keyFor} onChange={(e) => { setKeyFor(e.target.value); setVerify(null) }}><option value="gemini">Gemini</option><option value="groq">Groq</option></select><input type="password" autoComplete="off" placeholder={keyFor === 'groq' ? 'gsk_…' : 'AIza…'} value={keyDraft} onChange={(e) => setKeyDraft(e.target.value)} /><button onClick={doVerify} disabled={busy === 'verify'}>{busy === 'verify' ? 'Checking…' : 'Check key'}</button></div>
         {verify && <p className={verify.ok ? 'okmsg' : 'err'}>{verify.ok ? `Key works. ${verify.models.length} models available.` : verify.detail}</p>}
         {verify?.models?.length > 0 && <details><summary>Available models</summary><p className="models">{verify.models.join(' · ')}</p></details>}
       </div>

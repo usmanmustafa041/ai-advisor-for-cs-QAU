@@ -133,3 +133,22 @@ def test_password_hashing():
     assert verify_password("correct horse battery", h) and not verify_password("wrong", h)
     assert "correct" not in h
     assert mask_secret("AIzaSyABCDEFGHIJKLM") == "AIza…JKLM"
+
+
+def test_groq_sits_between_gemini_and_ollama(rt):
+    runtime, _db, s = rt
+    router = ProviderRouter(s, runtime)
+    assert [p.name for p in router.candidates()] == ["ollama"]
+    runtime.set("groq.api_key", "gsk_TESTKEY", "tester")
+    assert [p.name for p in router.candidates()] == ["groq", "ollama"]
+    runtime.set("gemini.api_key", "AIzaSyTESTKEY", "tester")
+    assert [p.name for p in router.candidates()] == ["gemini", "groq", "ollama"]
+    runtime.set("llm.primary", "groq", "tester")
+    assert [p.name for p in router.candidates()][0] == "groq"
+
+
+def test_gemini_quota_fails_over_to_groq(rt):
+    gemini = Fake("gemini", [ProviderError("gemini", "quota", "out of tokens")])
+    groq = Fake("groq", ["from groq"])
+    out = run_router(make_router(rt, [gemini, groq, Fake("ollama", ["local"])]))
+    assert [p for p, _m, _t in out] == ["groq"] and out[0][2] == "from groq"

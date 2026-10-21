@@ -1,7 +1,8 @@
 """Provider selection, failover, circuit breaking and concurrency control.
 
 Order is decided per request from the administrator's settings: Gemini first when a key is
-configured (or when forced), then local Ollama. Failures that happen *before* any text has
+configured (or when forced), then Groq when its key is set (the hosted fallback for
+when Gemini is out of quota or down), then local Ollama. Failures that happen *before* any text has
 been streamed fail over silently; a failure after streaming began surfaces as
 :class:`MidStreamError` so the caller can restart the answer cleanly on the next provider.
 """
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from advisor.config import Settings
 from advisor.llm.base import GenParams, LLMProvider, Message, MidStreamError, ProviderError
 from advisor.llm.gemini import GeminiProvider
+from advisor.llm.groq import GroqProvider
 from advisor.llm.ollama import OllamaProvider
 from advisor.runtime_settings import RuntimeSettings
 
@@ -72,22 +74,29 @@ class ProviderRouter:
     # ------------------------------------------------------------------ provider construction
     def candidates(self) -> list[LLMProvider]:
         rt = self.rt
-        gemini = ollama = None
+        gemini = groq = ollama = None
         key = rt.get("gemini.api_key")
         if key and rt.get("gemini.enabled"):
             gemini = GeminiProvider(key, rt.get("gemini.model"), int(rt.get("gemini.thinking_budget")))
+        groq_key = rt.get("groq.api_key")
+        if groq_key and rt.get("groq.enabled"):
+            groq = GroqProvider(groq_key, rt.get("groq.model"))
         if rt.get("ollama.enabled"):
             ollama = OllamaProvider(
                 rt.get("ollama.base_url"), rt.get("ollama.model"),
                 self.s.ollama_num_ctx, self.s.ollama_keep_alive,
             )
         primary = rt.get("llm.primary")
-        order = {"gemini": [gemini, ollama], "ollama": [ollama, gemini]}.get(primary, [gemini, ollama])
+        order = {
+            "gemini": [gemini, groq, ollama],
+            "groq": [groq, gemini, ollama],
+            "ollama": [ollama, gemini, groq],
+        }.get(primary, [gemini, groq, ollama])
         return [p for p in order if p is not None]
 
     def _sem(self, name: str) -> asyncio.Semaphore:
         if name not in self._sems:
-            n = self.s.llm_max_concurrency_remote if name == "gemini" else self.s.llm_max_concurrency_local
+            n = self.s.llm_max_concurrency_remote if name in ("gemini", "groq") else self.s.llm_max_concurrency_local
             self._sems[name] = asyncio.Semaphore(n)
         return self._sems[name]
 
@@ -151,6 +160,9 @@ class ProviderRouter:
         key = rt.get("gemini.api_key")
         if key:
             providers.append(GeminiProvider(key, rt.get("gemini.model"), 0))
+        groq_key = rt.get("groq.api_key")
+        if groq_key:
+            providers.append(GroqProvider(groq_key, rt.get("groq.model")))
         providers.append(OllamaProvider(rt.get("ollama.base_url"), rt.get("ollama.model")))
         results = await asyncio.gather(*(p.status() for p in providers), return_exceptions=True)
         for p, res in zip(providers, results, strict=True):
@@ -168,6 +180,9 @@ class ProviderRouter:
                 "paused": h.open, "p50_ms": lat[len(lat) // 2] if lat else None,
             }
             out.append(item)
+        if not groq_key:
+            out.insert(-1, {"name": "groq", "configured": False, "healthy": False,
+                            "model": rt.get("groq.model"), "detail": "No API key set", "models": [], "stats": {}})
         if not key:
             out.insert(0, {"name": "gemini", "configured": False, "healthy": False,
                            "model": rt.get("gemini.model"), "detail": "No API key set", "models": [], "stats": {}})
