@@ -132,7 +132,7 @@ function AuthScreen({ online, onAuthenticated, onGuest }) {
         <p className="eyebrow">STUDENT ACADEMIC SERVICES</p>
         <h1>Academic guidance, grounded in department information.</h1>
         <p>Ask about courses, prerequisites, fees, policies, class schedules, exams, and research requirements in English or Urdu.</p>
-        <div className="auth-features"><span>✓ Source-backed answers</span><span>✓ Private query history</span><span>✓ English + اردو</span></div>
+        <div className="auth-features"><span>Source-backed answers</span><span>Private query history</span><span>English + اردو</span></div>
       </div>
       <small className="campus-line">Computer Science Department · Islamabad, Pakistan</small>
       <small className="developer-credit">{DEVELOPER_CREDIT}</small>
