@@ -15,6 +15,7 @@ import { advisorHealth, advisorRequest } from './advisor/advisorApi'
 const API = import.meta.env.VITE_API_URL || '/api/v1'
 // 'advisor' = the new chatbot engine (default). 'legacy' keeps the portal's original chat engine.
 const CHAT_ENGINE = import.meta.env.VITE_CHAT_ENGINE || 'advisor'
+const DEVELOPER_CREDIT = 'Developed by Usman Mustafa · Reg. No. 04072213047'
 const suggestions = [
   ['Prerequisites', 'I have not passed PSP, can I take DSA?'],
   ['Credit hours', 'How many credit hours can I take this semester?'],
@@ -134,6 +135,7 @@ function AuthScreen({ online, onAuthenticated, onGuest }) {
         <div className="auth-features"><span>✓ Source-backed answers</span><span>✓ Private query history</span><span>✓ English + اردو</span></div>
       </div>
       <small className="campus-line">Computer Science Department · Islamabad, Pakistan</small>
+      <small className="developer-credit">{DEVELOPER_CREDIT}</small>
     </section>
     <section className="auth-card"><div className="connection-row"><span className={online ? 'connection online' : 'connection'}><i />{online ? 'Service online' : 'Service offline'}</span></div><p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : mode === 'register' ? 'STUDENT REGISTRATION' : 'ACCOUNT RECOVERY'}</p><h2>{mode === 'login' ? 'Sign in to your advisor' : mode === 'register' ? 'Create your account' : mode === 'forgot-password' ? 'Reset your password' : 'Choose a new password'}</h2><p>{mode === 'login' ? 'Students and administrators use the same secure sign-in.' : mode === 'register' ? 'Register with your email and a secure password.' : 'Use the recovery token to securely replace your password.'}</p>
       <form onSubmit={submit} className="stack-form">{mode === 'register' && <label>Full name<input value={fullName} onChange={(e) => setFullName(e.target.value)} required autoComplete="name" /></label>}{mode !== 'reset-password' && <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" /></label>}{mode === 'reset-password' && <label>Reset token<input value={resetToken} onChange={(e) => setResetToken(e.target.value)} required /></label>}{!['forgot-password'].includes(mode) && <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} minLength="8" required autoComplete={mode === 'login' ? 'current-password' : 'new-password'} /></label>}{['register', 'reset-password'].includes(mode) && <label>Confirm password<input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength="8" required autoComplete="new-password" /></label>}{notice && <div className="notice">{notice}</div>}{error && <div className="form-error" role="alert">{error}</div>}<button className="primary" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Register' : mode === 'forgot-password' ? 'Send reset token' : 'Save new password'}</button></form>
@@ -258,6 +260,7 @@ function Shell({ auth, online, active, setActive, onLogout, children }) {
           <span className="icon">↪</span>
           {guest ? 'Sign in' : 'Log out'}
         </button>
+        <small className="sidebar-credit">{DEVELOPER_CREDIT}</small>
       </div>
     </aside>
 

@@ -1476,3 +1476,7 @@ table td { color: #35423a; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+/* Developer credit: login page and the bottom of the sidebar */
+.developer-credit { display: block; margin-top: 6px; color: #9fc4bc; font-size: 11px; letter-spacing: .02em; }
+.sidebar-credit { display: block; padding: 12px 12px 0; margin-top: 8px; border-top: 1px solid #ffffff1a; color: #8fb3ab; font-size: 10px; line-height: 1.5; }

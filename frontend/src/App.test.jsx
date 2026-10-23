@@ -19,6 +19,7 @@ describe('academic advisor interface', () => {
     expect(screen.getByText('Sign in to your advisor')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Create an account/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Continue without signing in/i })).toBeInTheDocument()
+    expect(screen.getByText(/Developed by Usman Mustafa · Reg\. No\. 04072213047/)).toBeInTheDocument()
   })
 
   it('allows guest advising without exposing saved history', () => {
@@ -27,6 +28,7 @@ describe('academic advisor interface', () => {
     expect(screen.getByText(/Guest conversation · no history/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'History' })).not.toBeInTheDocument()
     expect(screen.getByText(/Sign in to save and revisit/i)).toBeInTheDocument()
+    expect(screen.getByText(/Developed by Usman Mustafa/)).toBeInTheDocument()  // sidebar credit
   })
 
   it('renders private authenticated chat and Urdu toggle', () => {
